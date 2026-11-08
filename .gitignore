@@ -1,0 +1,5 @@
+models/
+episodes/*/out/
+episodes/*/qa/
+__pycache__/
+*.pyc
