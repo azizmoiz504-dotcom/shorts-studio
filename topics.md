@@ -1,0 +1,33 @@
+# Topic backlog (tick when published; keep ~2/3 space/Earth/nature, ~1/3 body/brain)
+Each idea: title — the angle that makes it viral. Verify every fact before using it; drop an idea if the science is shaky.
+
+- [x] 001 What if the Moon disappeared? — tides shrink, reefs lose their calendar, Earth's tilt could wander (PUBLISHED)
+- [ ] What if Earth stopped spinning? — everything not tied down keeps moving east at up to 1,600 km/h; oceans rush to the poles
+- [ ] What if you never slept? — what the brain does at night (cleaning, memory filing) and what goes wrong without it
+- [ ] What if Earth had rings like Saturn? — a glowing arch across every night sky; shadows that make seasons stranger
+- [ ] What if the Sun disappeared? — 8 minutes 20 seconds of normal, then darkness; Earth flies off in a straight line
+- [ ] What if humans could photosynthesize? — you'd need skin the size of a tennis court to power your body
+- [ ] What if Earth had two moons? — bigger tides, double eclipses, brighter nights
+- [ ] What if you fell into Jupiter? — no surface: clouds, then crushing pressure, then metallic hydrogen
+- [ ] What if you could see ultraviolet like a bee? — flowers have hidden landing strips
+- [ ] What if Earth's magnetic field vanished? — no northern lights, compasses spin, solar wind strips the air slowly
+- [ ] What if a day lasted a year? — one side scorched, one side frozen, life on the twilight ring
+- [ ] What if you remembered everything? — why forgetting is a feature: the brain prunes to think clearly
+- [ ] What if the oceans disappeared? — mountains taller than Everest appear; the planet heats up
+- [ ] What if Jupiter disappeared? — the solar system's bodyguard is gone; more comets come our way
+- [ ] What if humans could hibernate? — body temperature, heartbeat, and why bears don't lose their muscles
+- [ ] What if Earth had no tilt? — no seasons, the same weather forever, the poles stay frozen
+- [ ] What if a teaspoon of neutron star landed on Earth? — heavier than a mountain range, falls straight through the ground
+- [ ] What if you lived on the Moon for a year? — weaker bones and muscles, taller spine, giant leaps
+- [ ] What if the Sun were a blue star? — far hotter and brighter; plants might look black; it would burn out fast
+- [ ] What if you never felt pain? — why pain is your body's alarm system
+- [ ] What if Earth had no atmosphere? — black sky at noon, no sound, no weather
+- [ ] What if all the ice melted? — coastlines move inland; a new map of the world
+- [ ] What if you grew new teeth like a shark? — sharks replace thousands of teeth in a lifetime
+- [ ] What if you dug a hole through the Earth? — a forty two minute fall to the other side
+- [ ] What if trees disappeared? — the air, the rain and the soil all change
+- [ ] What if you could hold your breath like a whale? — sperm whales dive for over an hour
+- [ ] What if Earth were twice as big? — stronger gravity, shorter animals, harder rocket launches
+- [ ] What if lightning stopped? — lightning makes nitrogen plants need
+- [ ] What if you lived in space for a year? — what happened to astronauts' bodies on long missions
+- [ ] What if Earth orbited a red dwarf? — a red sky, a "year" of a few weeks, tidal locking

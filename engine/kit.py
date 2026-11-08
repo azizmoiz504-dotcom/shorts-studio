@@ -400,26 +400,8 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
 REEF_TIPS = []
 
 
-def branch(c, x, y, ang, L, w, depth, col, sway, tips):
-    x2 = x + math.cos(math.radians(ang)) * L
-    y2 = y + math.sin(math.radians(ang)) * L
-    c.drawLine(x, y, x2, y2, P(hx(col), stroke=w))
-    if depth == 0:
-        c.drawCircle(x2, y2, w * 0.62, P(hx("#ffd0e6", 0.9)))
-        tips.append((x2, y2))
-        return
-    for da in (-26, 24):
-        branch(c, x2, y2, ang + da + sway, L * 0.72, w * 0.78, depth - 1, col, sway, tips)
 
 
-def fish(c, x, y, s, col, flip, t, k):
-    c.save(); c.translate(x, y); c.scale(-s if flip else s, s)
-    wag = 8 * math.sin(t * 9 + k)
-    c.drawPath(path_from([(-30, 0), (-52, -16 + wag * 0.4), (-52, 16 + wag * 0.4)], True), P(hx(col)))
-    c.drawOval(skia.Rect.MakeXYWH(-36, -20, 66, 40), P(hx(col)))
-    c.drawOval(skia.Rect.MakeXYWH(-6, -20, 20, 40), P(hx("#ffffff", 0.85)))
-    c.drawCircle(16, -5, 5, P(hx("#140f38")))
-    c.restore()
 
 
 def moon_phase(c, x, y, r, k, a):
@@ -690,16 +672,6 @@ def spinning_top(c, x, y, t, a, steady=1.0):
     c.restore()
 
 
-def hand(c, x, y, a):
-    """Simple flat mitten hand pointing down, fingertip at (x, y)."""
-    c.save(); c.translate(x, y)
-    skin = hx("#f2b48c", a)
-    rrect(c, -40, -150, 80, 120, 34, P(skin))          # palm
-    rrect(c, -14, -60, 28, 66, 14, P(skin))            # index finger down
-    rrect(c, -52, -132, 30, 70, 15, P(hx("#e9a37b", a)))  # thumb
-    rrect(c, -44, -230, 88, 90, 20, P(hx("#4a7bff", a)))  # sleeve
-    rrect(c, -50, -150, 100, 20, 10, P(hx("#3a63d8", a)))
-    c.restore()
 
 
 def hand2(c, x, y, a):
