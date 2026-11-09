@@ -140,18 +140,21 @@ def hill(c, base, amps, col, rim=None, rim_a=0.0, xs=(-100, W + 100)):
     return top
 
 
-def pine(c, x, y, s, col, rim, rim_a):
+def pine(c, x, y, s, col, rim, rim_a, bend=0.0):
+    """bend > 0 leans the tree to the right (wind from the left): higher tiers lean further, the trunk stays planted"""
     for k in range(3):
         w = s * (0.9 - k * 0.22)
         yy = y - k * s * 0.55
-        pth = path_from([(x - w / 2, yy), (x, yy - s * 0.8), (x + w / 2, yy)], True)
+        bx = x + bend * s * 0.30 * k * k * 0.5 + bend * s * 0.12 * k     # tier base centre drifts with height
+        tx = x + bend * s * (0.35 + 0.42 * k)                             # tier tip leans furthest
+        pth = path_from([(bx - w / 2, yy), (tx, yy - s * 0.8), (bx + w / 2, yy)], True)
         c.drawPath(pth, P(hx(col)))
         if rim_a > 0:
-            c.drawLine(x, yy - s * 0.8, x + w / 2, yy, P(hx(rim, rim_a * 0.8), stroke=3))
+            c.drawLine(tx, yy - s * 0.8, bx + w / 2, yy, P(hx(rim, rim_a * 0.8), stroke=3))
     c.drawRect(skia.Rect.MakeXYWH(x - s * 0.06, y, s * 0.12, s * 0.18), P(hx(col)))
 
 
-def house(c, x, y, t, m, win=1.0, sc=0.92):
+def house(c, x, y, t, m, win=1.0, sc=0.92, wind=0.0):
     """cozy log cabin in 3/4 view; (x, y) = ground point under the front-right corner"""
     c.save(); c.translate(x, y); c.scale(sc, sc)
     lit = mixhex("#2a2570", "#3a3290", m)
@@ -212,8 +215,8 @@ def house(c, x, y, t, m, win=1.0, sc=0.92):
     # smoke
     for k in range(5):
         ph = (t * 0.2 + k / 5) % 1
-        sx = x + (69 + ph * 60 + math.sin(ph * 6 + k) * 10) * sc
-        sy = y + (-186 - ph * 170) * sc
+        sx = x + (69 + ph * 60 + math.sin(ph * 6 + k) * 10 + wind * ph * 260) * sc
+        sy = y + (-186 - ph * 170 * (1 - 0.75 * wind)) * sc
         c.drawCircle(sx, sy, (9 + ph * 18) * sc, P(hx("#7d73c8", 0.30 * (1 - ph))))
 
 
@@ -259,7 +262,40 @@ def boat(c, x, y, t, m):
     c.restore()
 
 
-def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1.0, sparkle_p=None, shoot=None):
+WHEEL = Stars(900, seed=41, region=(-700, -900, W + 700, 1500))
+POLE = (500, 360)
+
+
+def star_wheel(c, t, rot, trail, a=1.0, pole=POLE):
+    """night sky turning around the pole star: rot = sky angle (deg), trail = arc length behind each star (deg)"""
+    px, py = pole
+    for (x, y, sz, ph, f, col, big) in WHEEL.s:
+        dx, dy = x - px, y - py
+        rr = math.hypot(dx, dy)
+        if rr < 8:
+            continue
+        a0 = math.degrees(math.atan2(dy, dx)) + rot
+        tw = 0.7 + 0.3 * math.sin(t * f * 2.4 + ph)
+        if trail > 0.3:
+            rect = skia.Rect.MakeXYWH(px - rr, py - rr, 2 * rr, 2 * rr)
+            n = 5
+            for k in range(n):  # tail fades out behind the star
+                arc = skia.Path()
+                arc.addArc(rect, a0 + trail * (1 - (k + 1) / n), trail / n + 0.15)
+                c.drawPath(arc, P(hx(col, a * 0.55 * ((k + 1) / n) ** 1.6), stroke=sz * 0.75))
+        ang = math.radians(a0)
+        sx, sy = px + rr * math.cos(ang), py + rr * math.sin(ang)
+        if big:
+            c.drawCircle(sx, sy, sz * 3.0, P(hx(col, 0.16 * a * tw), blur=sz * 2))
+        c.drawCircle(sx, sy, sz * 0.55 * (0.85 + 0.25 * tw), P(hx(col, a * tw)))
+    # the pole star itself barely moves
+    glow(c, px, py, 10, "#fff6d8", 0.8 * a, 2.4)
+    c.drawCircle(px, py, 4.2, P(hx("#ffffff", a)))
+
+
+def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1.0, sparkle_p=None, shoot=None,
+              sky_rot=None, trail=0.0, tree_bend=0.0, cloud_dx=0.0, show_boat=True):
+    """sky_rot (deg) switches the sky to a wheeling star field around POLE with trails of `trail` degrees"""
     sky_top = mixhex("#0a0c2c", "#0e1446", m)
     sky_mid = mixhex("#151a58", "#25307e", m)
     sky_hor = mixhex("#2f2870", "#5a47a9", m)
@@ -270,6 +306,8 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
     c.translate(-W / 2, -H * 0.45 + cam_y)
     # the Milky Way shows up once the moonlight is gone
     mw = (1 - m) * (1 - (moon_s if moon_s < 1 else 1) * 0.0)
+    if sky_rot is not None:
+        c.save(); c.rotate(sky_rot, POLE[0], POLE[1])
     if mw > 0.01:
         rnd_mw = random.Random(17)
         x0, y0, x1, y1 = -120, 1180, 1200, 120
@@ -291,7 +329,11 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         c.clipPath(band, doAntiAlias=True)
         MILKY.draw(c, t, 0.85 * mw, 0, -cam_y * 0.4, 0.5)
         c.restore()
-    STARS.draw(c, t, 0.75 + 0.25 * (1 - m), 0, -cam_y * 0.4)
+    if sky_rot is not None:
+        c.restore()
+        star_wheel(c, t, sky_rot, trail, 0.75 + 0.25 * (1 - m))
+    else:
+        STARS.draw(c, t, 0.75 + 0.25 * (1 - m), 0, -cam_y * 0.4)
     # moon halo lighting the sky
     if m > 0:
         c.drawCircle(MOON_X, MOON_Y, 760, P(shader=rad(MOON_X, MOON_Y, 760, [hx("#8f7dff", 0.30 * m), hx("#8f7dff", 0.08 * m), hx("#8f7dff", 0)], [0, 0.4, 1])))
@@ -312,7 +354,7 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         glow(c, hx_, hy_, 8, "#ffffff", fa, 2.5)
     # flat clouds drifting (lit from the moon)
     for k, (cx0, cy0, sc, sp) in enumerate([(160, 300, 1.0, 9), (980, 785, 1.1, 6), (420, 170, 0.75, 11)]):
-        x = (cx0 + t * sp) % (W + 500) - 250
+        x = (cx0 + t * sp + cloud_dx * (0.7 + 0.3 * k)) % (W + 500) - 250
         col = mixhex("#15144a", "#2f2b86", m)
         c.save(); c.translate(x, cy0); c.scale(sc, sc)
         cl = skia.Path()
@@ -351,7 +393,8 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         yy = lake_top + 40 + k * 38
         c.drawLine(120 + k * 60, yy, 260 + k * 60, yy, P(hx("#7d73d6", 0.25 * m), stroke=3))
     # little rowboat with a fisherman and a lantern
-    boat(c, 545 + 10 * math.sin(t * 0.35), 1405, t, m)
+    if show_boat:
+        boat(c, 545 + 10 * math.sin(t * 0.35), 1405, t, m)
     # drifting mist over the water
     for k in range(4):
         mx_ = (k * 330 + t * (14 + k * 4)) % (W + 600) - 300
@@ -376,13 +419,13 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         for j in (-1, 0, 1):
             c.drawLine(gx + j * 6, gy, gx + j * 11, gy - 16 - 6 * (j == 0), P(hx(mixhex("#1a1650", "#2c2678", m)), stroke=4))
     hx_ = 905
-    house(c, hx_, 1472, t, m)
+    house(c, hx_, 1472, t, m, wind=min(1.0, tree_bend * 2.5))
     for (px, s_) in [(90, 130), (190, 95), (290, 75), (380, 60), (1010, 105)]:
-        pine(c, px, near_y(px) + 10, s_, mixhex("#0c0a2c", "#151249", m), rim, 0.6 * m)
+        pine(c, px, near_y(px) + 10, s_, mixhex("#0c0a2c", "#151249", m), rim, 0.6 * m, tree_bend * (1 + 0.15 * math.sin(t * 7 + px)))
     # foreground
     hill(c, 1700, [(40, 0.005, 1.0), (12, 0.03, 0.5)], mixhex("#080720", "#0f0d33", m))
     for (px, s) in [(60, 200), (1070, 230)]:
-        pine(c, px, 1720, s, mixhex("#05041a", "#0a0928", m), rim, 0.35 * m)
+        pine(c, px, 1720, s, mixhex("#05041a", "#0a0928", m), rim, 0.35 * m, tree_bend * 0.8 * (1 + 0.15 * math.sin(t * 6 + px)))
     # fireflies (more visible in the dark)
     ff = 0.35 + 0.65 * (1 - m)
     rnd = random.Random(9)
@@ -792,3 +835,187 @@ def thermometer(c, x, y, h, v, a):
     for k in range(5):
         yy = y + 30 + k * (h - 50) / 4
         c.drawLine(x + 30, yy, x + 46, yy, P(hx("#ffffff", 0.4 * a), stroke=4))
+
+
+# ---------------------------------------------------------------- episode 002 additions (spin, winds, new world)
+def spin_arrow(c, cx, cy, rx, ry, a, col, t, front, rot=0.0, flow=1.0):
+    """elliptical arrow around a planet's equator showing eastward spin (front half moves left -> right).
+    Draw with front=False BEFORE the planet and front=True AFTER it."""
+    if a <= 0:
+        return
+    c.save(); c.translate(cx, cy); c.rotate(rot)
+    rect = skia.Rect.MakeXYWH(-rx, -ry, 2 * rx, 2 * ry)
+    if not front:
+        arc = skia.Path(); arc.addArc(rect, 180, 180)
+        dashed(c, arc, P(hx(col, 0.35 * a), stroke=5), 16, 14, -t * 60 * flow)
+    else:
+        arc = skia.Path(); arc.addArc(rect, 160, -138)
+        c.drawPath(arc, P(hx(col, 0.25 * a), stroke=16, blur=6))
+        dashed(c, arc, P(hx(col, 0.95 * a), stroke=7), 26, 14, t * 90 * flow)
+        ang = math.radians(22)
+        x, y = rx * math.cos(ang), ry * math.sin(ang)
+        tx_, ty_ = rx * math.sin(ang), -ry * math.cos(ang)
+        d = math.hypot(tx_, ty_)
+        tx_, ty_ = tx_ / d, ty_ / d
+        nx_, ny_ = -ty_, tx_
+        s = 30
+        head = path_from([(x + tx_ * s, y + ty_ * s), (x - tx_ * s * 0.6 + nx_ * s * 0.75, y - ty_ * s * 0.6 + ny_ * s * 0.75),
+                          (x - tx_ * s * 0.6 - nx_ * s * 0.75, y - ty_ * s * 0.6 - ny_ * s * 0.75)], True)
+        c.drawPath(head, P(hx(col, a)))
+    c.restore()
+
+
+def wind_streaks(c, t, a, speed=1.0, seed=4, n=24, y0=150, y1=1320, col="#e8f2ff"):
+    """fast air lines racing to the right (east): soft wide gusts + crisp tapered streaks"""
+    if a <= 0:
+        return
+    rnd = random.Random(seed)
+    for k in range(6):  # broad soft gusts
+        y = rnd.uniform(y0, y1)
+        sp = rnd.uniform(700, 1000) * speed
+        L = rnd.uniform(500, 800)
+        x = (rnd.uniform(0, W + 1400) + t * sp) % (W + 1400) - 700
+        pts = [(x - L + u * L / 12, y + 18 * math.sin(u / 12 * 4 + t * 2 + k)) for u in range(13)]
+        c.drawPath(path_from(pts, False, 0.6), P(shader=lin(x - L, y, x, y, [hx(col, 0), hx(col, 0.10 * a), hx(col, 0)]), stroke=34, blur=12, mode=skia.BlendMode.kPlus))
+    for k in range(n):
+        y = rnd.uniform(y0, y1)
+        L = rnd.uniform(240, 520)
+        sp = rnd.uniform(1100, 1700) * speed
+        x = (rnd.uniform(0, W + 1000) + t * sp) % (W + 1000) - 500
+        th = rnd.uniform(3.0, 6.0)
+        pts = [(x - L + u * L / 15, y + 9 * math.sin(u / 15 * 3.5 + t * 5 + k)) for u in range(16)]
+        pth = path_from(pts, False, 0.6)
+        c.drawPath(pth, P(shader=lin(x - L, y, x, y, [hx(col, 0), hx(col, 0.75 * a)]), stroke=th, mode=skia.BlendMode.kPlus))
+
+
+def flying_leaves(c, t, a, seed=6, n=18):
+    if a <= 0:
+        return
+    rnd = random.Random(seed)
+    for k in range(n):
+        y = rnd.uniform(500, 1300)
+        sp = rnd.uniform(500, 900)
+        x = (rnd.uniform(0, W + 400) + t * sp) % (W + 400) - 200
+        yy = y + 40 * math.sin(t * 3 + k) - (x * 0.08)
+        s = rnd.uniform(14, 22)
+        col = rnd.choice(["#5fcf8e", "#9be38a", "#ffcf6b"])
+        c.save(); c.translate(x, yy); c.rotate(t * rnd.uniform(200, 500) + k * 40)
+        leaf = path_from([(-s, 0), (0, -s * 0.55), (s, 0), (0, s * 0.55)], True, 0.8)
+        c.drawPath(leaf, P(hx(col, 0.9 * a)))
+        c.drawLine(-s * 0.8, 0, s * 0.8, 0, P(hx("#1a3a2a", 0.5 * a), stroke=1.5))
+        c.restore()
+
+
+def planet_shade(c, cx, cy, r, light=(-0.75, -0.45)):
+    """re-apply the planet's flat shading + rim (for overlays painted on top of planet())"""
+    llx, lly = light
+    c.save(); c.translate(cx, cy)
+    c.clipPath(circ_path(0, 0, r), doAntiAlias=True)
+    sh = skia.Op(circ_path(0, 0, r * 1.01), circ_path(llx * r * 0.42, lly * r * 0.42, r * 1.08), skia.PathOp.kDifference_PathOp)
+    if sh:
+        c.drawPath(sh, P(hx("#0a0f3a", 0.36), blur=r * 0.006))
+    sh2 = skia.Op(circ_path(0, 0, r * 1.01), circ_path(llx * r * 0.9, lly * r * 0.9, r * 1.25), skia.PathOp.kDifference_PathOp)
+    if sh2:
+        c.drawPath(sh2, P(hx("#050826", 0.28), blur=r * 0.03))
+    hl = skia.Op(circ_path(0, 0, r), circ_path(-llx * r * 0.12, -lly * r * 0.12, r * 0.98), skia.PathOp.kDifference_PathOp)
+    if hl:
+        c.drawPath(hl, P(hx("#ffffff", 0.22), blur=r * 0.01))
+    c.restore()
+
+
+def _shore(r, lat, top, lon0, wob=0.035, ph=0.0):
+    """wavy coastline at latitude lat (deg) across the visible disc, as a list of points left -> right"""
+    yb = -r * math.sin(math.radians(lat))
+    pts = []
+    for i in range(73):
+        x = -r * 1.05 + 2.1 * r * i / 72
+        u = x / r
+        w_ = math.sin(u * 5.0 + ph) * 0.5 + math.sin(u * 11.0 + 1.7 + ph) * 0.3 + math.sin(u * 23.0 + 0.4) * 0.12
+        pts.append((x, yb + r * wob * w_ * (1 if top else -1)))
+    return pts
+
+
+def new_world(c, cx, cy, r, lon0, n_lat, s_lat, land_a, hero=0.0, t=0.0, drain=1.0):
+    """Overlay for a planet() Earth that has stopped spinning: oceans pooled at the poles above n_lat / below s_lat,
+    and the drained equatorial sea floor (fading in with land_a) joining every continent into one belt."""
+    c.save(); c.translate(cx, cy)
+    c.clipPath(circ_path(0, 0, r), doAntiAlias=True)
+    north = _shore(r, n_lat, True, lon0, ph=0.4)
+    south = _shore(r, s_lat, False, lon0, ph=2.1)
+    belt = path_from(north + list(reversed(south)), True)
+    if land_a > 0 and drain > 0:
+        c.save(); c.clipPath(belt, doAntiAlias=True)
+        hb = r * 1.05 * drain   # the sea floor dries out from the equator toward both shores
+        wet = path_from([(x, -hb + 10 * math.sin(x * 0.03 + 1)) for x in range(int(-r) - 10, int(r) + 20, 20)] +
+                        [(x, hb + 10 * math.sin(x * 0.025 + 2)) for x in range(int(r) + 10, int(-r) - 20, -20)], True, 0.6)
+        c.clipPath(wet, doAntiAlias=True)
+        c.drawRect(skia.Rect.MakeXYWH(-r, -r, 2 * r, 2 * r), P(shader=lin(-r * 0.6, -r * 0.6, r * 0.7, r * 0.7, [hx("#ecc46e", land_a), hx("#d49a4c", land_a)])))
+        # new grassland spreading over the old sea floor, and a few dry basins
+        rnd = random.Random(3)
+        for k in range(16):
+            x, y = rnd.uniform(-r, r), rnd.uniform(north[36][1] + 30, south[36][1] - 30)
+            w_, h_ = rnd.uniform(90, 200), rnd.uniform(30, 60)
+            c.drawPath(path_from([(x - w_ / 2, y), (x - w_ * 0.2, y - h_ / 2), (x + w_ * 0.3, y - h_ * 0.4), (x + w_ / 2, y + h_ * 0.1), (x, y + h_ / 2)], True, 1.0),
+                       P(hx("#8fc66a" if k % 3 else "#b98d50", 0.6 * land_a)))
+        # the old continents stay green on top
+        for name, poly in CONT_D.items():
+            pts, vis = project(poly, r, lon0)
+            if vis:
+                c.drawPath(path_from(pts, True, 0.6), P(hx("#3ec27a", land_a)))
+        for name, poly in FOR_D.items():
+            pts, vis = project(poly, r, lon0)
+            if vis:
+                c.drawPath(path_from(pts, True, 0.8), P(hx("#2ea866", 0.9 * land_a)))
+        for name, poly in DES_D.items():
+            pts, vis = project(poly, r, lon0)
+            if vis:
+                c.drawPath(path_from(pts, True, 0.8), P(hx("#e6be62", 0.92 * land_a)))
+        c.restore()
+    # polar oceans
+    for pts, top in ((north, True), (south, False)):
+        edge = -r * 1.1 if top else r * 1.1
+        poly = pts + [(r * 1.1, edge), (-r * 1.1, edge)]
+        sea = path_from(poly, True)
+        yb = pts[36][1]
+        c.drawPath(sea, P(shader=lin(0, yb, 0, edge, [hx("#2a8fe6", 0.96), hx("#1450b4", 0.98)])))
+        c.drawPath(path_from(pts, False, 0.5), P(hx("#9ae6ff", 0.55), stroke=r * 0.03))
+        c.drawPath(path_from(pts, False, 0.5), P(hx("#e6f8ff", 0.85), stroke=r * 0.009))
+    c.restore()
+    planet_shade(c, cx, cy, r)
+    if hero > 0:  # glowing outline of the new continent
+        c.save(); c.translate(cx, cy); c.clipPath(circ_path(0, 0, r * 1.0), doAntiAlias=True)
+        for pts in (north, south):
+            c.drawPath(path_from(pts, False, 0.5), P(hx("#ffd84d", 0.55 * hero), stroke=14, blur=8, mode=skia.BlendMode.kPlus))
+            c.drawPath(path_from(pts, False, 0.5), P(hx("#fff2b0", 0.9 * hero), stroke=4))
+        c.restore()
+
+
+def cabin_icon(c, x, y, s, ang, lit, a=1.0):
+    """tiny cabin standing on a surface at (x, y), 'up' pointing along ang (degrees); lit = window glow 0..1"""
+    c.save(); c.translate(x, y); c.rotate(ang + 90); c.scale(s, s)
+    c.drawRect(skia.Rect.MakeXYWH(-10, -16, 20, 16), P(hx("#6b4fd8", a)))
+    c.drawRect(skia.Rect.MakeXYWH(0, -16, 10, 16), P(hx("#5440b8", a)))
+    c.drawPath(path_from([(-13, -15), (0, -27), (13, -15)], True), P(hx("#ff7a59", a)))
+    c.drawRect(skia.Rect.MakeXYWH(-6, -11, 6, 6), P(hx(mixhex("#2b2370", "#ffd84d", lit), a)))
+    if lit > 0:
+        glow(c, -3, -8, 6, "#ffd84d", 0.8 * lit * a, 2.2)
+    c.restore()
+
+
+def arc_arrow(c, cx, cy, rr, a0, a1, p, col, a=1.0, w=8):
+    """curved arrow along a circle of radius rr from angle a0 to a1 (deg, screen); p = draw-on progress 0..1"""
+    if a <= 0 or p <= 0:
+        return
+    a1p = a0 + (a1 - a0) * p
+    arc = skia.Path(); arc.addArc(skia.Rect.MakeXYWH(cx - rr, cy - rr, 2 * rr, 2 * rr), a0, a1p - a0)
+    c.drawPath(arc, P(hx(col, 0.3 * a), stroke=w * 2.6, blur=6))
+    c.drawPath(arc, P(hx(col, a), stroke=w))
+    an = math.radians(a1p)
+    x, y = cx + rr * math.cos(an), cy + rr * math.sin(an)
+    sg = 1 if a1 > a0 else -1
+    tx_, ty_ = -math.sin(an) * sg, math.cos(an) * sg
+    nx_, ny_ = -ty_, tx_
+    s = w * 3.2
+    head = path_from([(x + tx_ * s, y + ty_ * s), (x - tx_ * s * 0.5 + nx_ * s * 0.8, y - ty_ * s * 0.5 + ny_ * s * 0.8),
+                      (x - tx_ * s * 0.5 - nx_ * s * 0.8, y - ty_ * s * 0.5 - ny_ * s * 0.8)], True)
+    c.drawPath(head, P(hx(col, a)))
