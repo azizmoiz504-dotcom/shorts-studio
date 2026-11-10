@@ -3,7 +3,7 @@ Each idea: title — the angle that makes it viral. Verify every fact before usi
 
 - [x] 001 What if the Moon disappeared? — tides shrink, reefs lose their calendar, Earth's tilt could wander (PUBLISHED)
 - [x] 002 What if Earth stopped spinning? — air keeps racing east, oceans pool at the poles, one equatorial continent, 1 day = 1 year (PUBLISHED)
-- [ ] What if you never slept? — what the brain does at night (cleaning, memory filing) and what goes wrong without it
+- [x] 003 What if you never slept? — fluid waves rinse the brain, memories get saved, local sleep while awake, dolphins sleep half a brain (PUBLISHED)
 - [ ] What if Earth had rings like Saturn? — a glowing arch across every night sky; shadows that make seasons stranger
 - [ ] What if the Sun disappeared? — 8 minutes 20 seconds of normal, then darkness; Earth flies off in a straight line
 - [ ] What if humans could photosynthesize? — you'd need skin the size of a tennis court to power your body

@@ -294,7 +294,7 @@ def star_wheel(c, t, rot, trail, a=1.0, pole=POLE):
 
 
 def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1.0, sparkle_p=None, shoot=None,
-              sky_rot=None, trail=0.0, tree_bend=0.0, cloud_dx=0.0, show_boat=True):
+              sky_rot=None, trail=0.0, tree_bend=0.0, cloud_dx=0.0, show_boat=True, win=1.0):
     """sky_rot (deg) switches the sky to a wheeling star field around POLE with trails of `trail` degrees"""
     sky_top = mixhex("#0a0c2c", "#0e1446", m)
     sky_mid = mixhex("#151a58", "#25307e", m)
@@ -419,7 +419,7 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         for j in (-1, 0, 1):
             c.drawLine(gx + j * 6, gy, gx + j * 11, gy - 16 - 6 * (j == 0), P(hx(mixhex("#1a1650", "#2c2678", m)), stroke=4))
     hx_ = 905
-    house(c, hx_, 1472, t, m, wind=min(1.0, tree_bend * 2.5))
+    house(c, hx_, 1472, t, m, win=win, wind=min(1.0, tree_bend * 2.5))
     for (px, s_) in [(90, 130), (190, 95), (290, 75), (380, 60), (1010, 105)]:
         pine(c, px, near_y(px) + 10, s_, mixhex("#0c0a2c", "#151249", m), rim, 0.6 * m, tree_bend * (1 + 0.15 * math.sin(t * 7 + px)))
     # foreground
@@ -1019,3 +1019,250 @@ def arc_arrow(c, cx, cy, rr, a0, a1, p, col, a=1.0, w=8):
     head = path_from([(x + tx_ * s, y + ty_ * s), (x - tx_ * s * 0.5 + nx_ * s * 0.8, y - ty_ * s * 0.5 + ny_ * s * 0.8),
                       (x - tx_ * s * 0.5 - nx_ * s * 0.8, y - ty_ * s * 0.5 - ny_ * s * 0.8)], True)
     c.drawPath(head, P(hx(col, a)))
+
+
+# ---------------------------------------------------------------- episode 003 additions (the brain, an eye, a dolphin)
+_BR_OUT = [(-0.93, 0.20), (-1.01, -0.06), (-0.95, -0.38), (-0.74, -0.64), (-0.42, -0.82), (-0.04, -0.89), (0.34, -0.84),
+           (0.66, -0.68), (0.90, -0.42), (1.00, -0.10), (0.96, 0.18), (0.80, 0.36), (0.56, 0.42), (0.30, 0.47),
+           (0.04, 0.57), (-0.26, 0.59), (-0.50, 0.50), (-0.63, 0.32), (-0.74, 0.26)]
+# grooves (sulci), unit coords, side view facing LEFT; the first two are the big landmark fissures
+_BR_GROOVES = [
+    [(-0.64, 0.24), (-0.40, 0.12), (-0.10, 0.08), (0.18, -0.04), (0.38, -0.16)],                 # lateral fissure
+    [(0.08, -0.89), (0.02, -0.64), (0.08, -0.40), (-0.02, -0.18), (0.02, 0.04)],                   # central groove
+    [(-0.22, -0.86), (-0.28, -0.66), (-0.20, -0.48), (-0.28, -0.30), (-0.20, -0.16)],
+    [(-0.52, -0.74), (-0.44, -0.58), (-0.54, -0.42), (-0.46, -0.26)],
+    [(-0.80, -0.50), (-0.70, -0.38), (-0.78, -0.22), (-0.68, -0.08)],
+    [(-0.97, -0.16), (-0.86, -0.06), (-0.90, 0.10)],
+    [(-0.62, -0.12), (-0.48, -0.06), (-0.38, -0.14), (-0.30, -0.02)],
+    [(0.26, -0.84), (0.22, -0.62), (0.30, -0.46), (0.24, -0.30)],
+    [(0.52, -0.72), (0.46, -0.54), (0.56, -0.36), (0.50, -0.18)],
+    [(0.78, -0.54), (0.70, -0.38), (0.80, -0.20)],
+    [(0.97, -0.20), (0.86, -0.06), (0.92, 0.12)],
+    [(0.30, -0.12), (0.46, 0.0), (0.62, 0.02), (0.76, 0.16)],
+    [(-0.48, 0.38), (-0.24, 0.28), (0.0, 0.32), (0.22, 0.22), (0.40, 0.26)],
+    [(-0.20, 0.52), (0.04, 0.46), (0.26, 0.42)],
+]
+BRAIN_LIT, BRAIN_SHADE, BRAIN_GROOVE, BRAIN_RIM = "#ff9fd0", "#d8679f", "#b94a87", "#ffd9ec"
+
+
+def _dense_pts(pts, step):
+    out = []
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / step))
+        out += [(lerp(x0, x1, i / n), lerp(y0, y1, i / n)) for i in range(n)]
+    return out + [pts[-1]]
+
+
+def _wiggle(pts, amp, freq, ph):
+    d = _dense_pts(pts, 0.012)
+    out, acc = [], 0.0
+    for i, (x, y) in enumerate(d):
+        if i:
+            acc += math.hypot(x - d[i - 1][0], y - d[i - 1][1])
+        a, b = d[max(0, i - 1)], d[min(len(d) - 1, i + 1)]
+        tx, ty = b[0] - a[0], b[1] - a[1]
+        L = math.hypot(tx, ty) or 1
+        env = max(0.0, math.sin(math.pi * i / max(1, len(d) - 1))) ** 0.5
+        off = amp * env * math.sin(acc * freq + ph)
+        out.append((x - ty / L * off, y + tx / L * off))
+    return out
+
+
+def _br_outline():
+    # Catmull-Rom outline sampled densely, then scalloped: one soft bump per fold so the edge reads as gyri
+    pth = path_from(_BR_OUT, True, 1.0)
+    meas = skia.PathMeasure(pth, True)
+    L = meas.getLength()
+    n = 260
+    pts = []
+    for i in range(n):
+        (px, py), (tx, ty) = meas.getPosTan(L * i / n)
+        bump = 0.0
+        pts.append((px - ty * bump, py + tx * bump))
+    return pts
+
+
+_BR_EDGE = None
+_BR_GW = None
+
+
+def brain_paths(x, y, s):
+    """(cerebrum, cerebellum, stem) skia paths for a side-view brain centred at (x, y), half-width s"""
+    global _BR_EDGE
+    if _BR_EDGE is None:
+        _BR_EDGE = _br_outline()
+    cer = path_from([(x + s * u, y + s * v) for u, v in _BR_EDGE], True, 0.5)
+    cb = skia.Path(); cb.addOval(skia.Rect.MakeXYWH(x + s * 0.30, y + s * 0.30, s * 0.62, s * 0.40))
+    stem = path_from([(x + s * 0.14, y + s * 0.40), (x + s * 0.40, y + s * 0.40), (x + s * 0.36, y + s * 0.70),
+                      (x + s * 0.34, y + s * 0.98), (x + s * 0.18, y + s * 0.98), (x + s * 0.16, y + s * 0.66)], True, 0.6)
+    return cer, cb, stem
+
+
+def brain_side(c, x, y, s, a=1.0, lit=BRAIN_LIT, shade=BRAIN_SHADE, groove=BRAIN_GROOVE, rim=BRAIN_RIM, inner=None,
+               stem_a=1.0, over=None, tint=0.0, tint_col="#4b45a8"):
+    """friendly side-view brain (facing left, light from upper left). `inner(c)` draws extra layers clipped inside
+    the cerebrum (fluid, sparks...) after the base colours and before the grooves; `over(c)` draws clipped after them."""
+    global _BR_GW
+    if a <= 0:
+        return
+    if tint > 0:
+        lit, shade, groove, rim = (mixhex(q, tint_col, tint) for q in (lit, shade, groove, rim))
+    if _BR_GW is None:
+        _BR_GW = [_wiggle(g, 0.012 if k < 2 else 0.042, 13, k * 1.7) for k, g in enumerate(_BR_GROOVES)]
+    if a < 1:
+        c.saveLayerAlpha(None, int(255 * a))
+    cer, cb, stem = brain_paths(x, y, s)
+    # brainstem + cerebellum sit behind the cerebrum
+    if stem_a > 0:
+        c.drawPath(stem, P(hx(mixhex(shade, "#7a3a8a", 0.25), stem_a)))
+        c.save(); c.clipPath(stem, doAntiAlias=True)
+        c.drawRect(skia.Rect.MakeXYWH(x + s * 0.12, y + s * 0.4, s * 0.09, s * 0.6), P(hx(mixhex(lit, shade, 0.5), stem_a)))
+        c.restore()
+    c.drawPath(cb, P(hx(shade)))
+    c.save(); c.clipPath(cb, doAntiAlias=True)
+    c.drawOval(skia.Rect.MakeXYWH(x + s * 0.27, y + s * 0.26, s * 0.62, s * 0.38), P(hx(mixhex(lit, shade, 0.35))))
+    for k in range(5):
+        yy = y + s * (0.40 + k * 0.065)
+        c.drawPath(path_from([(x + s * 0.28, yy - s * 0.02), (x + s * 0.60, yy + s * 0.03), (x + s * 0.95, yy - s * 0.03)], False, 1.0),
+                   P(hx(groove, 0.8), stroke=max(2, s * 0.022)))
+    c.restore()
+    # cerebrum: shadow colour, then the lit face offset towards the light (two-tone flat shading)
+    c.drawPath(cer, P(hx(shade)))
+    c.save(); c.clipPath(cer, doAntiAlias=True)
+    c.save(); c.translate(x - s * 0.045, y - s * 0.06); c.scale(0.975, 0.975); c.translate(-x, -y)
+    c.drawPath(cer, P(shader=lin(x - s, y - s, x + s, y + s * 0.5, [hx(mixhex(lit, "#ffffff", 0.14)), hx(lit)])))
+    c.restore()
+    if inner is not None:
+        inner(c)
+    for k, g in enumerate(_BR_GW):
+        pts = [(x + s * u, y + s * v) for u, v in g]
+        w = s * (0.036 if k < 2 else 0.03)
+        pth = path_from(pts, False, 0.8)
+        c.drawPath(pth, P(hx(groove), stroke=w))
+        # a thin highlight just above each groove sells the soft folds
+        c.save(); c.translate(-s * 0.010, -s * 0.020)
+        c.drawPath(pth, P(hx(rim, 0.30), stroke=w * 0.4))
+        c.restore()
+    if over is not None:
+        over(c)
+    c.restore()
+    # rim light on the upper-left edge, fading out smoothly
+    c.drawPath(cer, P(shader=lin(x - s * 0.8, y - s * 0.8, x + s * 0.1, y + s * 0.1, [hx(rim, 0.9), hx(rim, 0)]), stroke=max(2, s * 0.018)))
+    if a < 1:
+        c.restore()
+
+
+def brain_top(c, x, y, s, left=1.0, right=1.0, a=1.0):
+    """top-view brain icon (front at the top): two hemispheres. left/right = how awake each half is (0 = dark, asleep)"""
+    if a <= 0:
+        return
+    if a < 1:
+        c.saveLayerAlpha(None, int(255 * a))
+    for side, k in ((-1, left), (1, right)):
+        lit = mixhex("#4a3f8f", BRAIN_LIT, k)
+        sh = mixhex("#2f2868", BRAIN_SHADE, k)
+        gr = mixhex("#241d55", BRAIN_GROOVE, k)
+        pts = [(x + side * s * u, y + s * v) for u, v in
+               [(0.04, -0.98), (0.40, -0.92), (0.70, -0.70), (0.84, -0.30), (0.86, 0.12), (0.76, 0.56), (0.50, 0.90),
+                (0.20, 1.00), (0.04, 0.96)]]
+        pth = path_from(pts, True, 1.0)
+        c.drawPath(pth, P(hx(sh)))
+        c.save(); c.clipPath(pth, doAntiAlias=True)
+        c.save(); c.translate(-s * 0.05, -s * 0.06)
+        c.drawPath(pth, P(hx(lit)))
+        c.restore()
+        for g in ([(0.14, -0.74), (0.42, -0.58), (0.72, -0.62)], [(0.16, -0.30), (0.46, -0.16), (0.78, -0.26)],
+                  [(0.14, 0.16), (0.44, 0.28), (0.76, 0.16)], [(0.20, 0.60), (0.48, 0.70), (0.64, 0.58)]):
+            gw = _wiggle(g, 0.05, 15, g[0][1] * 7)
+            c.drawPath(path_from([(x + side * s * u, y + s * v) for u, v in gw], False, 0.8), P(hx(gr), stroke=s * 0.055))
+        c.restore()
+    if a < 1:
+        c.restore()
+
+
+def eye_open(c, x, y, s, a=1.0, look=0.0, lid=0.0):
+    """big friendly open eye (almond, white, blue iris, pupil, highlight). lid 0 = wide open, 1 = closed"""
+    if a <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a))
+    top = lerp(-0.62, 0.0, lid)
+    al = path_from([(-1.0, 0.0), (-0.5, top * 0.92), (0.0, top), (0.5, top * 0.92), (1.0, 0.0), (0.5, 0.5), (0.0, 0.62),
+                    (-0.5, 0.5)], True, 1.0)
+    m = skia.Matrix(); m.setScale(s, s); m.postTranslate(x, y)
+    al.transform(m)
+    c.drawPath(al, P(hx("#fbf8ff")))
+    c.save(); c.clipPath(al, doAntiAlias=True)
+    ix = x + look * s * 0.25
+    c.drawCircle(ix, y, s * 0.46, P(shader=rad(ix - s * 0.1, y - s * 0.12, s * 0.5, [hx("#7fd0ff"), hx("#2a78d8")])))
+    c.drawCircle(ix, y, s * 0.46, P(hx("#1a4fa8"), stroke=s * 0.05))
+    c.drawCircle(ix, y, s * 0.22, P(hx("#0e1236")))
+    c.drawCircle(ix - s * 0.13, y - s * 0.15, s * 0.1, P(hx("#ffffff")))
+    c.drawCircle(ix + s * 0.12, y + s * 0.1, s * 0.045, P(hx("#ffffff", 0.8)))
+    # soft lid shadow at the top of the white
+    c.drawPath(al, P(hx("#8a7fd6", 0.35), stroke=s * 0.16, blur=s * 0.05))
+    c.restore()
+    c.drawPath(al, P(hx("#1a1440"), stroke=s * 0.07))
+    c.restore()
+
+
+def dolphin(c, x, y, s, t, eye=0.0, a=1.0):
+    """friendly bottlenose-style dolphin seen from the side, facing LEFT. (x, y) = body centre, s = half length.
+    eye: 0 = closed (resting), 1 = open"""
+    if a <= 0:
+        return
+    if a < 1:
+        c.saveLayerAlpha(None, int(255 * a))
+    c.save(); c.translate(x, y); c.scale(s, s)
+    back, back_sh, belly = "#5f86e0", "#3d5cb8", "#d6e6ff"
+    sw = 0.05 * math.sin(t * 2.2)
+    body_pts = [(-1.00, 0.06), (-0.90, 0.02), (-0.80, -0.06), (-0.74, -0.16), (-0.60, -0.24), (-0.30, -0.29), (0.00, -0.27),
+                (0.30, -0.20), (0.56, -0.12), (0.78, -0.05 + sw * 0.4), (0.90, 0.00 + sw), (0.80, 0.07 + sw * 0.6),
+                (0.56, 0.12), (0.26, 0.20), (-0.10, 0.23), (-0.46, 0.20), (-0.72, 0.13), (-0.86, 0.10), (-0.98, 0.09)]
+    body = path_from(body_pts, True, 1.0)
+    # far-side flipper (behind the body)
+    c.drawPath(path_from([(-0.40, 0.14), (-0.30, 0.34), (-0.24, 0.30), (-0.26, 0.14)], True, 0.8), P(hx(back_sh)))
+    # tail flukes (behind the body)
+    fy = sw
+    fl = path_from([(0.84, 0.02 + fy), (0.98, -0.16 + fy * 1.4), (1.10, -0.20 + fy * 1.6), (1.04, -0.06 + fy * 1.3),
+                    (0.98, 0.03 + fy), (1.06, 0.14 + fy * 1.3), (1.12, 0.26 + fy * 1.6), (0.98, 0.20 + fy * 1.4)], True, 0.7)
+    c.drawPath(fl, P(hx(back_sh)))
+    # dorsal fin
+    fin = path_from([(-0.08, -0.26), (0.06, -0.46), (0.18, -0.58), (0.16, -0.44), (0.26, -0.20)], True, 0.8)
+    c.drawPath(fin, P(hx(back_sh)))
+    c.save(); c.clipPath(fin, doAntiAlias=True); c.translate(-0.03, -0.01)
+    c.drawPath(path_from([(-0.08, -0.26), (0.06, -0.46), (0.16, -0.56), (0.10, -0.30)], True, 0.8), P(hx(back)))
+    c.restore()
+    # body: dark back, light belly (countershading), lit from the upper left
+    c.drawPath(body, P(hx(back_sh)))
+    c.save(); c.clipPath(body, doAntiAlias=True)
+    c.save(); c.translate(-0.02, -0.035); c.drawPath(body, P(hx(back))); c.restore()
+    bel = path_from([(-1.1, 0.07), (-0.80, 0.02), (-0.50, 0.06), (-0.10, 0.10), (0.30, 0.08), (0.60, 0.06), (0.95, 0.06),
+                     (0.95, 0.4), (-1.1, 0.4)], True, 0.8)
+    c.drawPath(bel, P(hx(belly)))
+    c.drawPath(path_from([(-0.80, 0.02), (-0.50, 0.06), (-0.10, 0.10), (0.30, 0.08), (0.60, 0.06)], False, 0.8),
+               P(hx("#a9c4f5"), stroke=0.018))
+    # soft highlight along the back
+    c.drawPath(path_from([(-0.62, -0.19), (-0.30, -0.24), (0.02, -0.22), (0.30, -0.16)], False, 0.8),
+               P(hx("#9fbcff", 0.6), stroke=0.035))
+    c.restore()
+    # rim light on the upper edge
+    c.drawPath(body, P(shader=lin(-0.8, -0.5, 0.3, 0.2, [hx("#cfe0ff", 0.8), hx("#cfe0ff", 0)]), stroke=0.016))
+    # near-side flipper
+    fp = path_from([(-0.46, 0.13), (-0.38, 0.30), (-0.30, 0.40), (-0.27, 0.33), (-0.30, 0.20), (-0.30, 0.13)], True, 0.8)
+    c.drawPath(fp, P(hx(back_sh)))
+    c.drawPath(fp, P(hx("#8fb0f5", 0.5), stroke=0.012))
+    # mouth line (gentle smile)
+    c.drawPath(path_from([(-0.97, 0.075), (-0.86, 0.075), (-0.78, 0.055)], False, 0.8), P(hx("#2c4590"), stroke=0.016))
+    # eye
+    ex, ey = -0.66, -0.06
+    if eye > 0.5:
+        c.drawCircle(ex, ey, 0.042, P(hx("#101436")))
+        c.drawCircle(ex - 0.012, ey - 0.014, 0.014, P(hx("#ffffff")))
+    else:
+        c.drawPath(path_from([(ex - 0.045, ey - 0.005), (ex, ey + 0.025), (ex + 0.045, ey - 0.005)], False, 0.8),
+                   P(hx("#101436"), stroke=0.018))
+    # blowhole
+    c.drawPath(path_from([(-0.44, -0.265), (-0.40, -0.275)], False), P(hx("#2c4590"), stroke=0.012))
+    c.restore()
+    if a < 1:
+        c.restore()
