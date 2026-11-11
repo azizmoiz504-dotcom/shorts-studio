@@ -294,8 +294,10 @@ def star_wheel(c, t, rot, trail, a=1.0, pole=POLE):
 
 
 def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1.0, sparkle_p=None, shoot=None,
-              sky_rot=None, trail=0.0, tree_bend=0.0, cloud_dx=0.0, show_boat=True, win=1.0):
-    """sky_rot (deg) switches the sky to a wheeling star field around POLE with trails of `trail` degrees"""
+              sky_rot=None, trail=0.0, tree_bend=0.0, cloud_dx=0.0, show_boat=True, win=1.0, sky_fn=None, lake_fn=None):
+    """sky_rot (deg) switches the sky to a wheeling star field around POLE with trails of `trail` degrees.
+    sky_fn(c): extra sky layer drawn after stars/moon, before clouds and terrain (e.g. a ring arch).
+    lake_fn(c, lake_top): extra reflections drawn on the lake (terrain coordinates)."""
     sky_top = mixhex("#0a0c2c", "#0e1446", m)
     sky_mid = mixhex("#151a58", "#25307e", m)
     sky_hor = mixhex("#2f2870", "#5a47a9", m)
@@ -352,6 +354,8 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
         fa = math.sin(shoot * math.pi)
         c.drawLine(tx, ty, hx_, hy_, P(shader=lin(tx, ty, hx_, hy_, [hx("#ffffff", 0), hx("#ffffff", 0.9 * fa)]), stroke=4))
         glow(c, hx_, hy_, 8, "#ffffff", fa, 2.5)
+    if sky_fn is not None:
+        sky_fn(c)
     # flat clouds drifting (lit from the moon)
     for k, (cx0, cy0, sc, sp) in enumerate([(160, 300, 1.0, 9), (980, 785, 1.1, 6), (420, 170, 0.75, 11)]):
         x = (cx0 + t * sp + cloud_dx * (0.7 + 0.3 * k)) % (W + 500) - 250
@@ -389,6 +393,8 @@ def landscape(c, t, moon_s=1.0, m=1.0, ghost=0.0, flash=None, cam_y=0.0, cam_z=1
             wv = 70 - k * 4 + 16 * math.sin(t * 2.2 + k * 1.3)
             ox = 10 * math.sin(t * 1.4 + k)
             c.drawRoundRect(skia.Rect.MakeXYWH(MOON_X - wv / 2 + ox, yy, wv, 6), 3, 3, P(hx("#e6deff", 0.55 * m * (1 - k / 10) * min(1, moon_s))))
+    if lake_fn is not None:
+        lake_fn(c, lake_top)
     for k in range(4):
         yy = lake_top + 40 + k * 38
         c.drawLine(120 + k * 60, yy, 260 + k * 60, yy, P(hx("#7d73d6", 0.25 * m), stroke=3))
@@ -1266,3 +1272,448 @@ def dolphin(c, x, y, s, t, eye=0.0, a=1.0):
     c.restore()
     if a < 1:
         c.restore()
+
+
+# ---------------------------------------------------------------- episode 004 additions (planetary rings)
+# ring bands from the outer edge inward: (u0, u1, colour, alpha) as fractions of the ring width
+RING_BANDS = [(0.00, 0.06, "#b9a9d6", 0.45), (0.06, 0.26, "#dcc9a6", 0.80), (0.26, 0.31, None, 0.0),
+              (0.31, 0.50, "#f2dfb8", 0.92), (0.50, 0.74, "#e2c48f", 0.85), (0.74, 1.00, "#a693c9", 0.40)]
+
+
+def _arc(rect, a0, sweep):
+    p = skia.Path()
+    p.addArc(rect, a0, sweep)
+    return p
+
+
+def ring_arch(c, t, cx, cy, rx, ry, w, a=1.0, grow=1.0, shine=0.0, sparkles=1.0, glow_k=1.0):
+    """A planetary ring seen from the ground: an elliptical arch (upper half of an ellipse centred on (cx, cy),
+    normally just below the horizon). w = band width in px. grow 0..1 sweeps it in from the left horizon.
+    Works from a thin vertical line (rx ~ w) to a wide rainbow arch."""
+    if a <= 0 or grow <= 0:
+        return
+    sweep = 180 * grow
+    for (u0, u1, col, al) in RING_BANDS:
+        if col is None:
+            continue
+        um = (u0 + u1) / 2
+        d = um * w
+        rr = skia.Rect.MakeLTRB(cx - rx + d, cy - ry + d, cx + rx - d, cy + ry - d)
+        bw = max(1.0, (u1 - u0) * w)
+        c.drawPath(_arc(rr, 180, sweep), P(hx(col, al * a * (0.85 + 0.15 * shine)), stroke=bw, cap=False))
+    # fine ringlet lines for texture (darker grooves inside the bright bands)
+    for k in range(9):
+        u = 0.08 + k * 0.075
+        if 0.25 < u < 0.33:
+            continue
+        d = u * w
+        rr = skia.Rect.MakeLTRB(cx - rx + d, cy - ry + d, cx + rx - d, cy + ry - d)
+        c.drawPath(_arc(rr, 180, sweep), P(hx("#8a74b8", 0.22 * a), stroke=max(1.0, w * 0.012), cap=False))
+    # soft additive ringshine around the band
+    d = 0.45 * w
+    rr = skia.Rect.MakeLTRB(cx - rx + d, cy - ry + d, cx + rx - d, cy + ry - d)
+    c.drawPath(_arc(rr, 180, sweep), P(hx("#ffd99a", (0.06 + 0.07 * shine) * a * glow_k), stroke=w * 1.8, blur=w * 0.5, cap=False,
+                                       mode=skia.BlendMode.kPlus))
+    # glints of sunlight travelling along the ring (particles orbiting)
+    if sparkles > 0:
+        rnd = random.Random(5)
+        for k in range(10):
+            ph = (rnd.uniform(0, 1) + t * rnd.uniform(0.025, 0.05)) % 1
+            ang = math.radians(180 + 180 * ph)
+            if 180 * ph > sweep:
+                continue
+            u = rnd.uniform(0.1, 0.7)
+            x = cx + (rx - u * w) * math.cos(ang)
+            y = cy + (ry - u * w) * math.sin(ang)
+            tw = 0.5 + 0.5 * math.sin(t * rnd.uniform(2, 4) + k)
+            sparkle(c, x, y, max(2.0, w * 0.045) * (0.7 + 0.5 * tw), "#fff6dc", 0.85 * a * sparkles * tw, t * 20 + k * 30)
+    # growing tip
+    if grow < 1:
+        ang = math.radians(180 + sweep)
+        x = cx + (rx - 0.45 * w) * math.cos(ang)
+        y = cy + (ry - 0.45 * w) * math.sin(ang)
+        glow(c, x, y, w * 0.55, "#fff1c8", 0.9 * a, 2.4)
+        sparkle(c, x, y, w * 0.12, "#ffffff", a, t * 90)
+
+
+def _ring_rects(r, rin, rout, ry_k):
+    out = []
+    for (u0, u1, col, al) in RING_BANDS:
+        if col is None:
+            continue
+        um = (u0 + u1) / 2
+        rr = lerp(rout, rin, um) * r
+        out.append((rr, (u1 - u0) * (rout - rin) * r, col, al))
+    return out
+
+
+def _arc_pieces(a0, a1, h0, h1):
+    """intersection of the angle interval [a0, a1] (any range, may exceed 360) with the half [h0, h1] (0..360)"""
+    res = []
+    for off in (-720, -360, 0, 360, 720):
+        lo, hi = max(a0, h0 + off), min(a1, h1 + off)
+        if hi > lo:
+            res.append((lo, hi - lo))
+    return res
+
+
+def planet_ring(c, cx, cy, r, tilt, front, a=1.0, t=0.0, rin=1.35, rout=2.2, ry_k=0.2, span=(0, 360), shadow=True,
+                light=(-0.75, -0.45), thin=1.0):
+    """Saturn-style ring around a planet in its equatorial plane. Draw front=False BEFORE planet(), front=True after.
+    span = (a0, a1) degrees of ring that exists (for a ring forming from debris). thin 0..1 fades the bands."""
+    if a <= 0:
+        return
+    c.save(); c.translate(cx, cy); c.rotate(tilt)
+    h0, h1 = (0, 180) if front else (179.7, 360.3)   # back half overlaps a hair so the tips show no seam
+    full = span[1] - span[0] >= 359.9
+    if span[1] - span[0] > 360:
+        m_ = (span[0] + span[1]) / 2
+        span = (m_ - 180, m_ + 180)
+    pieces = _arc_pieces(span[0], span[1], h0, h1)
+    if not pieces:
+        c.restore(); return
+    band = skia.Path()
+    for (rr, bw, col, al) in _ring_rects(r, rin, rout, ry_k):
+        rect = skia.Rect.MakeXYWH(-rr, -rr * ry_k, 2 * rr, 2 * rr * ry_k)
+        for (s0, sw) in pieces:
+            if full:
+                c.drawPath(_arc(rect, s0, sw), P(hx(col, al * a * thin), stroke=bw, cap=False))
+                continue
+            # fade toward the open ends of a forming ring: alpha follows the angle via a sweep gradient
+            cols, pos = [], []
+            for j in range(73):
+                ang = j * 5.0
+                f = 0.0
+                for off in (-360, 0, 360):
+                    aa = ang + off
+                    if span[0] <= aa <= span[1]:
+                        f = max(f, smooth(clamp(min(aa - span[0], span[1] - aa) / 50.0)))
+                cols.append(hx(col, al * a * thin * f))
+                pos.append(j / 72)
+            sh = skia.GradientShader.MakeSweep(0, 0, cols, pos, localMatrix=skia.Matrix.Scale(1, ry_k))
+            c.drawPath(_arc(rect, s0, sw), P(shader=sh, stroke=bw, cap=False))
+    # ringlet grooves
+    for k in range(8):
+        u = 0.1 + k * 0.1
+        if 0.24 < u < 0.33:
+            continue
+        rr = lerp(rout, rin, u) * r
+        rect = skia.Rect.MakeXYWH(-rr, -rr * ry_k, 2 * rr, 2 * rr * ry_k)
+        if not full:
+            continue
+        for (s0, sw) in pieces:
+            c.drawPath(_arc(rect, s0, sw), P(hx("#7d68ae", 0.25 * a * thin), stroke=max(1.0, r * 0.006), cap=False))
+    # the planet's shadow falls across the far side of the ring, away from the sun
+    if shadow and not front:
+        ring_area = skia.Path()
+        ring_area.addOval(skia.Rect.MakeXYWH(-rout * r * 1.02, -rout * r * ry_k * 1.02, 2 * rout * r * 1.02, 2 * rout * r * ry_k * 1.02))
+        hole = skia.Path()
+        hole.addOval(skia.Rect.MakeXYWH(-rin * r * 0.98, -rin * r * ry_k * 0.98, 2 * rin * r * 0.98, 2 * rin * r * ry_k * 0.98))
+        ring_area = skia.Op(ring_area, hole, skia.PathOp.kDifference_PathOp)
+        top = skia.Path(); top.addRect(skia.Rect.MakeLTRB(-rout * r * 1.1, -rout * r, rout * r * 1.1, 0))
+        ring_area = skia.Op(ring_area, top, skia.PathOp.kIntersect_PathOp)
+        c.save(); c.clipPath(ring_area, doAntiAlias=True)
+        tr = math.radians(-tilt)
+        lx, ly = light
+        llx = lx * math.cos(tr) - ly * math.sin(tr)
+        sx = 1 if llx < 0 else -1  # shadow points away from the sun along the ring plane
+        x0, x1 = sx * r * 0.7, sx * r * 1.75
+        c.drawRect(skia.Rect.MakeLTRB(min(0, x1), -r * 0.62, max(0, x1), r * 0.62),
+                   P(shader=lin(x0, 0, x1, 0, [hx("#0a0b30", 0.62 * a), hx("#0a0b30", 0)])))
+        c.restore()
+    c.restore()
+
+
+def chunk_path(s, seed, n=8):
+    rnd = random.Random(seed)
+    pts = []
+    for k in range(n):
+        ang = 2 * math.pi * k / n + rnd.uniform(-0.25, 0.25)
+        rr = s * rnd.uniform(0.72, 1.0)
+        pts.append((rr * math.cos(ang), rr * math.sin(ang) * rnd.uniform(0.8, 1.0)))
+    return path_from(pts, True, 0.22)
+
+
+def ring_chunk(c, x, y, s, rot, seed, ice=1.0, a=1.0, shine=0.0, light=(-0.75, -0.55)):
+    """one ring particle: ice (pale blue, glinting) when ice=1, sunlit rock (warm grey-tan, pitted) when ice=0.
+    Two-tone flat shading lit from the upper left + a thin rim light."""
+    if a <= 0 or s < 1:
+        return
+    lit = mixhex("#c9a98a", "#e6f4ff", ice)
+    shade = mixhex("#5e4a63", "#6f8fd6", ice)
+    mid = mixhex("#957a78", "#a9c8f2", ice)
+    rim = mixhex("#ffe2b0", "#ffffff", ice)
+    c.save(); c.translate(x, y)
+    pth = chunk_path(s, seed)
+    c.rotate(rot)
+    c.saveLayerAlpha(None, int(255 * clamp(a)))
+    c.drawPath(pth, P(hx(shade)))
+    c.save(); c.clipPath(pth, doAntiAlias=True)
+    tr = math.radians(-rot)
+    lx, ly = light
+    llx, lly = lx * math.cos(tr) - ly * math.sin(tr), lx * math.sin(tr) + ly * math.cos(tr)
+    c.save(); c.translate(llx * s * 0.42, lly * s * 0.42); c.drawPath(pth, P(hx(mid))); c.restore()
+    c.save(); c.translate(llx * s * 0.75, lly * s * 0.75); c.drawPath(pth, P(hx(lit))); c.restore()
+    rnd = random.Random(seed * 7 + 1)
+    # rock: a few soft pits; ice: a couple of bright facets
+    for k in range(2):
+        px, py, pr = rnd.uniform(-0.4, 0.4) * s, rnd.uniform(-0.4, 0.4) * s, rnd.uniform(0.07, 0.13) * s
+        c.drawOval(skia.Rect.MakeXYWH(px - pr * 1.2, py - pr, pr * 2.4, pr * 2), P(hx(mixhex("#7a6068", "#9fc0ee", ice), 0.40 * (1 - ice))))
+    # a darker facet on the shadow side makes it read as a solid rock, not a disc
+    fct = path_from([(0.05 * s, -0.15 * s), (0.9 * s, 0.1 * s), (0.5 * s, 0.9 * s), (-0.3 * s, 0.6 * s)], True)
+    c.drawPath(fct, P(hx(mixhex("#4a3a52", "#5f7fc8", ice), 0.35)))
+    if ice > 0:
+        f = path_from([(-0.1 * s, -0.5 * s), (0.25 * s, -0.2 * s), (0.0, 0.1 * s), (-0.35 * s, -0.15 * s)], True)
+        c.drawPath(f, P(hx("#ffffff", 0.35 * ice)))
+    # rim light on the sunlit edge
+    sh_p = skia.Path(pth); sh_p.offset(-llx * s * 0.10, -lly * s * 0.10)
+    rim_reg = skia.Op(pth, sh_p, skia.PathOp.kDifference_PathOp)
+    if rim_reg:
+        c.drawPath(rim_reg, P(hx(rim, 0.75 + 0.25 * shine)))
+    c.restore()
+    c.restore()
+    c.restore()
+    if ice > 0.3:
+        tw = 0.5 + 0.5 * math.sin(seed * 3.1 + rot * 0.05)
+        sparkle(c, x + light[0] * s * 0.45, y + light[1] * s * 0.45, s * 0.09 * ice, "#ffffff", 0.9 * ice * tw, 15)
+
+
+ANCIENT_LAND = {
+    "laurentia": [(-66, 8), (-58, 22), (-44, 26), (-30, 20), (-16, 22), (-12, 8), (-18, -6), (-26, -16), (-42, -19), (-50, -10), (-62, -6)],
+    "baltica": [(-10, -20), (4, -17), (18, -22), (24, -34), (14, -44), (0, -48), (-12, -40), (-8, -30)],
+    "siberia": [(26, 6), (32, 20), (44, 28), (58, 22), (62, 10), (54, -2), (40, -6), (30, -2)],
+    "gondwana": [(-100, -60), (-80, -44), (-60, -50), (-40, -46), (-24, -56), (-4, -60), (16, -54), (30, -40), (38, -26),
+                 (50, -14), (62, -6), (74, 4), (88, 6), (100, 0), (110, -14), (104, -30), (112, -44), (90, -58), (60, -72),
+                 (0, -84), (-60, -82), (-110, -74)],
+}
+# 21 craters, all within 30 degrees of the ancient equator (Tomkins et al. 2024), placed on land
+ANCIENT_CRATERS = [(-48, 4), (-38, 14), (-30, -4), (-44, -8), (-26, 6), (-50, -2),
+                   (-6, -26), (6, -25), (12, -29),
+                   (36, 4), (44, 16), (48, 6), (40, -1),
+                   (64, -12), (74, -4), (86, -2), (94, -10), (82, -18), (58, -22), (70, -26), (50, -28)]
+
+
+def _dense_ll(poly, step=4.0):
+    out = []
+    for i in range(len(poly)):
+        (a0, b0), (a1, b1) = poly[i], poly[(i + 1) % len(poly)]
+        n = max(1, int(math.hypot(a1 - a0, b1 - b0) / step))
+        for k in range(n):
+            out.append((lerp(a0, a1, k / n), lerp(b0, b1, k / n)))
+    return out
+
+
+def _coast(poly, seed):
+    """densify and roughen a lon/lat outline into a natural coastline (bays, capes)"""
+    pts = _dense_ll(poly, 2.0)
+    n = len(pts)
+    out = []
+    for i, (lo, la) in enumerate(pts):
+        (a0, b0), (a1, b1) = pts[i - 1], pts[(i + 1) % n]
+        tx, ty = a1 - a0, b1 - b0
+        d = math.hypot(tx, ty) or 1
+        nx_, ny_ = ty / d, -tx / d
+        u = i / n * 2 * math.pi
+        k = 3.2 * math.sin(u * 5 + seed) + 1.8 * math.sin(u * 11 + seed * 2.3) + 0.9 * math.sin(u * 23 + seed * 0.7)
+        out.append((lo + nx_ * k, la + ny_ * k))
+    return out
+
+
+ANCIENT_D = {k: _coast(v, 1.3 + i * 2.1) for i, (k, v) in enumerate(ANCIENT_LAND.items())}
+
+
+def ll_xy(r, lon, lat, lon0, elev=0.0):
+    """orthographic globe point for (lon, lat) seen from `elev` degrees above the equator plane -> (x, y, z), z>0 = visible"""
+    lam = math.radians(lon - lon0)
+    ph = math.radians(lat)
+    e = math.radians(elev)
+    x0 = math.cos(ph) * math.sin(lam)
+    y0 = -math.sin(ph)
+    z0 = math.cos(ph) * math.cos(lam)
+    y = y0 * math.cos(e) + z0 * math.sin(e)
+    z = -y0 * math.sin(e) + z0 * math.cos(e)
+    return r * x0, r * y, z
+
+
+def proj_e(poly, r, lon0, elev):
+    out, vis = [], False
+    for lon, lat in poly:
+        x, y, z = ll_xy(r, lon, lat, lon0, elev)
+        if z < 0:
+            d = math.hypot(x, y) or 1
+            x, y = x / d * r * 1.02, y / d * r * 1.02
+        else:
+            vis = True
+        out.append((x, y))
+    return out, vis
+
+
+def lat_arc(r, lat, lon0, elev, n=72):
+    """visible (front) arc of a latitude circle, left limb -> right limb, as points; [] if hidden"""
+    e = math.radians(elev)
+    ph = math.radians(lat)
+    k = -math.tan(ph) * math.tan(e) if abs(math.cos(ph)) > 1e-6 else 2
+    if k >= 1:
+        return []
+    lam_max = math.pi if k <= -1 else math.acos(k)
+    pts = []
+    for i in range(n + 1):
+        lam = -lam_max + 2 * lam_max * i / n
+        x, y, z = ll_xy(r, lon0 + math.degrees(lam), lat, lon0, elev)
+        pts.append((x, y))
+    return pts
+
+
+def lat_cap_path(r, lat, lon0, elev, north=True):
+    """region of the visible disc poleward of `lat` (north=True: lat..90, else -90..lat)"""
+    full = []
+    for i in range(145):
+        lon = lon0 - 180 + 360 * i / 144
+        x, y, z = ll_xy(r, lon, lat, lon0, elev)
+        full.append((x, y, z))
+    pole = ll_xy(r, 0, 90 if north else -90, lon0, elev)
+    if all(p[2] >= 0 for p in full):  # whole circle visible: a filled ellipse
+        return path_from([(p[0], p[1]) for p in full[:-1]], True)
+    arc = lat_arc(r, lat, lon0, elev)
+    if not arc:
+        return None
+    # close along the limb on the pole's side
+    (xa, ya), (xb, yb) = arc[0], arc[-1]
+    a0 = math.atan2(yb, xb)
+    a1 = math.atan2(ya, xa)
+    side = -1 if north else 1  # north cap closes over the top (negative y)
+    pts = list(arc)
+    # walk the limb from the right end back to the left end through the pole's side
+    if side < 0:
+        if a1 < a0:
+            a1 += 2 * math.pi
+        sweep = a1 - a0
+        if sweep > 0 and math.sin(a0 + sweep / 2) > 0:
+            sweep -= 2 * math.pi
+    else:
+        if a1 > a0:
+            a1 -= 2 * math.pi
+        sweep = a1 - a0
+        if math.sin(a0 + sweep / 2) < 0:
+            sweep += 2 * math.pi
+    for i in range(1, 40):
+        an = a0 + sweep * i / 40
+        pts.append((r * 1.02 * math.cos(an), r * 1.02 * math.sin(an)))
+    return path_from(pts, True)
+
+
+def ancient_earth(c, cx, cy, r, lon0, t, elev=14.0, ice=0.0, light=(-0.75, -0.45), atmo=1.0):
+    """Earth about 466 million years ago: one big southern supercontinent and small land masses near the equator,
+    seen from `elev` degrees above the equator plane (so a ring with ry_k = sin(elev) lines up with it).
+    ice 0..1 grows the polar ice caps toward the mid latitudes."""
+    lx, ly = light
+    atmo_c = "#5fd0ff"
+    if atmo > 0:
+        c.drawCircle(cx, cy, r * 1.22, P(shader=rad(cx, cy, r * 1.22, [hx(atmo_c, 0.0), hx(atmo_c, 0.0), hx(atmo_c, 0.35 * atmo), hx(atmo_c, 0)], [0, 0.78, 0.84, 1])))
+    c.save(); c.translate(cx, cy)
+    c.clipPath(circ_path(0, 0, r), doAntiAlias=True)
+    c.drawCircle(0, 0, r, P(shader=rad(lx * r * 0.45, ly * r * 0.45, r * 1.5, [hx("#2a8fe6"), hx("#1450b4")], [0, 1])))
+    c.drawCircle(lx * r * 0.35, ly * r * 0.35, r * 0.55, P(hx("#59b8ff", 0.10), blur=r * 0.15))
+    paths = []
+    for name, poly in ANCIENT_D.items():
+        pts, vis = proj_e(poly, r, lon0, elev)
+        if vis:
+            paths.append(path_from(pts, True, 0.3))
+    for pth in paths:
+        c.drawPath(pth, P(hx("#6cd3ff", 0.35), stroke=r * 0.05))
+        c.drawPath(pth, P(hx("#9ae6ff", 0.35), stroke=r * 0.022))
+    for pth in paths:  # bare land (plants had barely reached land yet): ochre with olive patches
+        c.drawPath(pth, P(hx("#c99a5b")))
+    for pth in paths:
+        c.save(); c.clipPath(pth, doAntiAlias=True)
+        c.drawCircle(-lx * r * 0.2, -ly * r * 0.2, r * 0.9, P(hx("#8fa35a", 0.45), blur=r * 0.25))
+        c.restore()
+    # polar ice caps
+    L = lerp(74, 40, ice)
+    for north in (True, False):
+        cp = None
+        if north and elev > 0 and L > elev + 6:
+            ring_pts = [(lon0 - 180 + 360 * i / 120, L + (1.5 + 3.0 * ice) * math.sin(math.radians(360 * i / 120) * 7 + 1.0)
+                         + (0.8 + 1.5 * ice) * math.sin(math.radians(360 * i / 120) * 13)) for i in range(120)]
+            ring_pts = [(lo - (lon0 - 180) + lon0 - 180, la) for lo, la in ring_pts]
+            pp, vis = proj_e(ring_pts, r, lon0, elev)
+            cp = path_from(pp, True, 0.4)
+        if cp is None:
+            cp = lat_cap_path(r, L if north else -L, lon0, elev, north)
+        if cp is not None:
+            c.drawPath(cp, P(hx("#eef8ff")))
+            if ice > 0:
+                arc = lat_arc(r, L if north else -L, lon0, elev)
+                if arc:
+                    c.drawPath(path_from(arc, False), P(hx("#bfe6ff", 0.8 * ice), stroke=r * 0.012))
+    # clouds
+    for (lo, la, s) in [(-60, 35, 1.0), (15, 48, 1.2), (80, 25, 0.9), (150, 40, 1.1), (-130, -20, 1.0), (30, -12, 0.9),
+                        (-10, 30, 0.8), (110, -45, 1.0), (-100, 50, 0.9), (-35, -38, 0.8)]:
+        lo2 = lo + t * 5
+        x, y, z = ll_xy(r, lo2, la, lon0, elev)
+        if z <= 0.08:
+            continue
+        sq = max(0.15, math.cos(math.radians(lo2 - lon0)))
+        c.save(); c.translate(x, y); c.scale(sq, 1)
+        w, h = r * 0.30 * s, r * 0.066 * s
+        for paint, ox, oy in ((P(hx("#0b2f7a", 0.18)), r * 0.02, r * 0.03), (P(hx("#ffffff", 0.9)), 0, 0)):
+            c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(-w / 2 + ox, -h / 2 + oy, w, h), h / 2, h / 2), paint)
+            c.drawCircle(-w * 0.12 + ox, -h * 0.45 + oy, h * 0.75, paint)
+            c.drawCircle(w * 0.14 + ox, -h * 0.35 + oy, h * 0.55, paint)
+        c.restore()
+    c.restore()
+    planet_shade(c, cx, cy, r, light)
+    c.save(); c.translate(cx, cy)
+    ang = math.degrees(math.atan2(ly, lx))
+    c.drawPath(_arc(skia.Rect.MakeXYWH(-r, -r, 2 * r, 2 * r), ang - 55, 110), P(hx(atmo_c, 0.55 * atmo), stroke=r * 0.025, blur=r * 0.01))
+    c.restore()
+
+
+def lat_band_path(r, lat0, lat1, lon0, elev):
+    """visible region between two latitudes (lat0 < lat1) as a path in globe-centred coordinates"""
+    top = lat_arc(r, lat1, lon0, elev)
+    bot = lat_arc(r, lat0, lon0, elev)
+    if not top or not bot:
+        return None
+    return path_from(top + list(reversed(bot)), True)
+
+
+def crater_mark(c, x, y, s, sq, a, marker=0.0):
+    """small impact crater seen on a globe (squashed by sq toward the limb); marker draws a locator ring"""
+    if a <= 0:
+        return
+    c.save(); c.translate(x, y); c.scale(sq, 1)
+    c.drawCircle(0, 0, s * 1.3, P(hx("#f6e2b8", 0.95 * a)))
+    c.drawCircle(0, 0, s, P(hx("#6b4a3a", a)))
+    c.drawCircle(s * 0.22, s * 0.22, s * 0.7, P(hx("#8a6248", a)))
+    if marker > 0:
+        c.drawCircle(0, 0, s * 2.3, P(hx("#ffd84d", 0.9 * a * marker), stroke=max(2.0, s * 0.28)))
+    c.restore()
+
+
+def snowflake(c, x, y, s, col="#bfe8ff", a=1.0, rot=0.0):
+    if a <= 0:
+        return
+    c.save(); c.translate(x, y); c.rotate(rot)
+    for k in range(6):
+        c.save(); c.rotate(k * 60)
+        pp = P(hx(col, a), stroke=s * 0.2)
+        c.drawLine(0, 0, 0, -s, pp)
+        c.drawLine(0, -s * 0.62, -s * 0.3, -s * 0.92, pp); c.drawLine(0, -s * 0.62, s * 0.3, -s * 0.92, pp)
+        c.restore()
+    c.restore()
+
+
+def pill(c, x, y, label, a=1.0, size=40, col="#1a1f55", txt="#ffffff", icon=None, icon_w=0):
+    """rounded label badge centred at (x, y); icon(c, cx, cy) draws a small icon at the left"""
+    if a <= 0:
+        return
+    w = measure(label, size, TF_POP_XB) + 64 + icon_w
+    h = size * 1.75
+    x0 = x - w / 2
+    rrect(c, x0, y - h / 2 + 8, w, h, h / 2, P(hx("#03051a", 0.35 * a), blur=14))
+    rrect(c, x0, y - h / 2, w, h, h / 2, P(hx(col, 0.95 * a)))
+    rrect(c, x0, y - h / 2, w, h, h / 2, P(hx("#ffffff", 0.14 * a), stroke=3))
+    if icon:
+        icon(c, x0 + 32 + icon_w / 2 - 6, y)
+    text(c, label, x0 + 32 + icon_w, y + size * 0.36, size, txt, a, TF_POP_XB, align="left")
