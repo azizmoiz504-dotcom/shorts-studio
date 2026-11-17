@@ -6,4 +6,4 @@
 | 003 | 2026-11-10 | What If You Never Slept? 🧠 | https://youtube.com/shorts/ZyYJcQ-qaGI | PUBLISHED |
 | 004 | 2026-11-11 | What If Earth Had Rings Like Saturn? 🪐 | https://youtube.com/shorts/F2Pa3OuCMRw | PUBLISHED |
 | 005 | 2026-11-14 | What If the Sun Vanished Right Now? ☀️ | https://youtube.com/shorts/N0d1_SxRlwU | PUBLISHED |
-| 006 | 2026-11-17 | What If You Could See Like a Bee? 🐝 | https://raw.githubusercontent.com/azizmoiz504-dotcom/shorts-studio/uploads/ep006.mp4 | PENDING_UPLOAD (Mac not connected; file is on the uploads branch) |
+| 006 | 2026-11-17 | What If You Could See Like a Bee? 🐝 | https://youtube.com/shorts/2MoC4R84I34 | PUBLISHED |
