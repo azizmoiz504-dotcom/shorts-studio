@@ -9,7 +9,7 @@ Each idea: title — the angle that makes it viral. Verify every fact before usi
 - [ ] What if humans could photosynthesize? — you'd need skin the size of a tennis court to power your body
 - [ ] What if Earth had two moons? — bigger tides, double eclipses, brighter nights
 - [ ] What if you fell into Jupiter? — no surface: clouds, then crushing pressure, then metallic hydrogen
-- [ ] What if you could see ultraviolet like a bee? — flowers have hidden landing strips
+- [ ] 006 What if you could see like a bee? — UV is blocked by your lens, sunflower bullseye, nectar-guide landing strips, reindeer see lichen and white wolves as dark (RENDERED, PENDING_UPLOAD)
 - [ ] What if Earth's magnetic field vanished? — no northern lights, compasses spin, solar wind strips the air slowly
 - [ ] What if a day lasted a year? — one side scorched, one side frozen, life on the twilight ring
 - [ ] What if you remembered everything? — why forgetting is a feature: the brain prunes to think clearly

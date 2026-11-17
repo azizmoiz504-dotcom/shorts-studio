@@ -27,7 +27,7 @@ NEB = [(180, 380, 560, "#6b3fd6", 0.20), (900, 620, 480, "#c2409e", 0.12), (760,
 
 
 def space_bg(c, t, top="#090c2b", bot="#1c1f5e", star_a=1.0, dx=0, dy=0, hue=None):
-    c.drawRect(skia.Rect.MakeWH(W, H), P(shader=lin(0, 0, 0, H, [hx(top), hx(bot)])))
+    c.drawRect(skia.Rect.MakeXYWH(-80, -80, W + 160, H + 160), P(shader=lin(0, 0, 0, H, [hx(top), hx(bot)])))
     for (x, y, r, col, a) in NEB:
         col = hue.get(col, col) if hue else col
         xx, yy = x + dx * 0.15 + 20 * math.sin(t * 0.15 + x), y + dy * 0.15
@@ -134,7 +134,7 @@ def hill(c, base, amps, col, rim=None, rim_a=0.0, xs=(-100, W + 100)):
         pts.append((x, y))
     top = list(pts)
     pts += [(xs[1], H + 400), (xs[0], H + 400)]
-    c.drawPath(path_from(pts, True), P(hx(col) if isinstance(col, str) else col))
+    c.drawPath(path_from(pts, True), P(hx(col)) if isinstance(col, str) else (P(shader=col) if isinstance(col, skia.Shader) else P(col)))
     if rim and rim_a > 0:
         c.drawPath(path_from(top, False), P(hx(rim, rim_a), stroke=5))
     return top
@@ -1717,3 +1717,334 @@ def pill(c, x, y, label, a=1.0, size=40, col="#1a1f55", txt="#ffffff", icon=None
     if icon:
         icon(c, x0 + 32 + icon_w / 2 - 6, y)
     text(c, label, x0 + 32 + icon_w, y + size * 0.36, size, txt, a, TF_POP_XB, align="left")
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# Meadow / pollinator pieces (episode 006): bee, flowers, sunflower, twilight meadow, ultraviolet "bee colours"
+# ------------------------------------------------------------------------------------------------------------------
+UV_DARK, UV_MID, UV_BRIGHT = "#2a1660", "#5b34b8", "#e9e0ff"
+
+
+def bee(c, x, y, s, t, flip=1.0, a=1.0, flap=1.0, tilt=0.0, eye_glow=0.0, look=0.0):
+    """cute round bee in side view, facing LEFT (flip=-1 faces right). (x, y) = body centre, s = body half length.
+    flap 0..1 = wing beat strength (0 = wings folded, resting). eye_glow adds a violet ultraviolet shimmer to the eye."""
+    if a <= 0 or s <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.rotate(tilt); c.scale(flip * s / 100.0, s / 100.0)
+    # wing beat: fast but slow enough not to alias at 30 fps
+    ph = math.sin(t * 2 * math.pi * 6.0)
+    wang = lerp(-8, -8 + 34 * ph, flap)
+
+    def wing(dx, ang, sc, al):
+        c.save(); c.translate(dx, -48); c.rotate(ang)
+        wp = path_from([(0, 0), (-38 * sc, -40 * sc), (-20 * sc, -98 * sc), (22 * sc, -112 * sc), (44 * sc, -70 * sc), (26 * sc, -18 * sc)], True, 1.0)
+        c.drawPath(wp, P(hx("#e8f4ff", 0.42 * al)))
+        c.drawPath(wp, P(hx("#ffffff", 0.75 * al), stroke=3.5))
+        c.drawLine(4, -6, 4 * sc, -88 * sc, P(hx("#ffffff", 0.35 * al), stroke=2.5))
+        c.restore()
+    # back wing (behind body)
+    wing(22, wang - 14, 0.86, 0.85)
+    # stinger + legs (behind body)
+    c.drawPath(path_from([(92, 2), (122, 10), (92, 20)], True), P(hx("#3b2a63")))
+    for lx in (-30, 0, 30):
+        c.drawPath(path_from([(lx, 50), (lx - 6, 74), (lx - 16, 80)], False), P(hx("#3b2a63"), stroke=7))
+    # body
+    body = skia.Path(); body.addOval(skia.Rect.MakeXYWH(-70, -64, 170, 128))
+    c.drawPath(body, P(shader=lin(-40, -60, 30, 70, [hx("#ffe36a"), hx("#ffc73a"), hx("#f29a1c")], [0, 0.55, 1])))
+    c.save(); c.clipPath(body, doAntiAlias=True)
+    for bx in (-2, 52):
+        band = path_from([(bx - 2, -70), (bx + 26, -70), (bx + 34, 70), (bx + 6, 70)], True)
+        c.drawPath(band, P(hx("#3b2a63")))
+    c.drawOval(skia.Rect.MakeXYWH(-50, 8, 160, 80), P(hx("#9a4a12", 0.22), blur=10))     # shadow side (bottom right)
+    c.drawOval(skia.Rect.MakeXYWH(-56, -58, 120, 40), P(hx("#fff6c8", 0.35), blur=8))   # lit top
+    c.restore()
+    c.drawPath(body, P(hx("#fff3b0", 0.55), stroke=4))
+    # head
+    hxp, hyp, hr = -78, -14, 50
+    c.drawCircle(hxp, hyp, hr, P(shader=rad(hxp - 18, hyp - 20, hr * 1.4, [hx("#57469a"), hx("#3b2a63"), hx("#2b1f4d")], [0, 0.6, 1])))
+    c.drawArc(skia.Rect.MakeXYWH(hxp - hr, hyp - hr, 2 * hr, 2 * hr), 190, 80, False, P(hx("#a596ff", 0.7), stroke=4))
+    # antennae
+    for k, (ax, ay) in enumerate([(-112, -96), (-82, -104)]):
+        c.drawPath(path_from([(hxp - 8 + k * 14, hyp - hr + 8), (ax + 10, ay + 36), (ax, ay)], False, 1.0), P(hx("#3b2a63"), stroke=6))
+        c.drawCircle(ax, ay, 9, P(hx("#3b2a63")))
+        c.drawCircle(ax - 3, ay - 3, 3.2, P(hx("#a596ff", 0.8)))
+    # big friendly eye
+    ex, ey, er = hxp - 16, hyp - 6, 21
+    if eye_glow > 0:
+        c.drawCircle(ex, ey, er * 2.6, P(shader=rad(ex, ey, er * 2.6, [hx("#b98cff", 0.65 * eye_glow), hx("#8a5cff", 0.0)]), mode=skia.BlendMode.kPlus))
+    c.drawCircle(ex, ey, er, P(hx("#fbf8ff")))
+    px, py = ex - 5 + look * 6, ey + 2
+    c.drawCircle(px, py, er * 0.58, P(hx("#1a1440")))
+    if eye_glow > 0:
+        c.drawCircle(px, py, er * 0.58, P(hx("#9b6bff", 0.75 * eye_glow)))
+    c.drawCircle(px - 4, py - 5, er * 0.22, P(hx("#ffffff")))
+    # smile + cheek
+    c.drawArc(skia.Rect.MakeXYWH(hxp - 44, hyp + 8, 26, 16), 20, 140, False, P(hx("#fbf8ff", 0.9), stroke=4))
+    c.drawCircle(hxp - 6, hyp + 18, 7, P(hx("#ff8fb8", 0.45)))
+    # front wing (over body)
+    wing(6, wang + 8, 1.0, 1.0)
+    c.restore()
+
+
+def petal_path(L, w, base=0.0, tipk=0.5):
+    """petal pointing up (-y) from (0, -base) to (0, -base-L); w = half width"""
+    return path_from([(0, -base), (w * 0.9, -base - L * 0.35), (w * 0.55, -base - L * 0.85), (0, -base - L),
+                      (-w * 0.55, -base - L * 0.85), (-w * 0.9, -base - L * 0.35)], True, 1.0)
+
+
+def flower(c, x, y, r, col, shade, centre="#ffd84d", rot=0.0, a=1.0, uv=0.0, guides=0.0, n=6, sq=1.0, open_=1.0):
+    """simple round flower seen from the front. uv 0..1 morphs into bee colours (bright tips, dark centre);
+    guides 0..1 draws the nectar-guide stripes from petal tip to centre."""
+    if a <= 0 or r <= 0 or open_ <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.scale(1, sq); c.rotate(rot)
+    L, w = r * 0.78 * open_, r * 0.42 * open_
+    base = r * 0.18
+    for i in range(n):
+        c.save(); c.rotate(360 / n * i)
+        pp = petal_path(L, w, base)
+        lit = mixhex(col, UV_BRIGHT, uv)
+        dk = mixhex(shade, UV_DARK, uv)
+        c.drawPath(pp, P(shader=lin(0, -base, 0, -base - L, [hx(dk), hx(mixhex(dk, lit, 0.55)), hx(lit)], [0, lerp(0.55, 0.45, uv), 1])))
+        c.drawPath(pp, P(hx(mixhex(shade, "#1a0f40", uv), 0.35), stroke=2.5))
+        if guides > 0:
+            g = ease_out(guides)
+            for gx, gl in ((0, 1.0), (-w * 0.32, 0.72), (w * 0.32, 0.72)):
+                y0 = -base - L * 0.86 * gl
+                y1 = lerp(y0, -base * 0.6, g)
+                c.drawLine(gx * (1 - 0.4 * seg(abs(y0), 0, L)), y0, gx * 0.15, y1, P(hx(mixhex("#7a3cc0", UV_DARK, uv), 0.9), stroke=max(2.5, r * 0.035)))
+        c.restore()
+    cr = r * 0.30
+    cc = mixhex(centre, UV_DARK, uv)
+    c.drawCircle(0, 0, cr, P(shader=rad(-cr * 0.35, -cr * 0.35, cr * 1.5, [hx(mixhex(cc, "#ffffff", 0.25)), hx(cc), hx(mixhex(cc, "#2a1450", 0.35))])))
+    rnd = random.Random(int(r))
+    for k in range(9):
+        an, d = k * 2.4, cr * 0.62 * math.sqrt((k + 0.5) / 9)
+        c.drawCircle(math.cos(an) * d, math.sin(an) * d, cr * 0.09, P(hx(mixhex("#c46a10", "#120a30", uv), 0.55)))
+    c.restore()
+
+
+def sunflower_head(c, x, y, r, t, uv=0.0, a=1.0, rot=0.0, sq=1.0, rings=0.0):
+    """big sunflower head seen from the front, r = outer radius (petal tips). uv 0..1 = ultraviolet 'bee colours':
+    UV-absorbing petal bases + disc go dark, UV-reflecting tips go bright -> a bullseye."""
+    if a <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.scale(1, sq); c.rotate(rot)
+    rd = r * 0.42
+    L = r - rd * 0.92
+    for layer, (n, off, wk, dk_) in enumerate([(21, 360 / 42, 0.15, 0.82), (21, 0.0, 0.14, 1.0)]):
+        for i in range(n):
+            ang = 360 / n * i + off + 1.5 * math.sin(t * 0.9 + i)
+            c.save(); c.rotate(ang)
+            ll = L * (0.94 + 0.06 * math.sin(i * 2.3)) * (0.96 if layer == 0 else 1.0)
+            pp = petal_path(ll, r * wk, rd * 0.92)
+            lit = mixhex(mixhex("#ffd84d", "#ffe680", 0.3) if layer else "#f6b62a", UV_BRIGHT, uv)
+            dkc = mixhex(mixhex("#f0a21c", "#f6b62a", 0.2), UV_DARK, uv)
+            mid = mixhex(mixhex("#ffcf3d", "#ffd84d", 0.5), mixhex(UV_MID, UV_DARK, 0.2), uv)
+            stops = [0, lerp(0.45, 0.48, uv), lerp(0.75, 0.56, uv), 1]
+            c.drawPath(pp, P(shader=lin(0, -rd, 0, -rd - ll, [hx(dkc), hx(mid), hx(lit), hx(lit)], stops)))
+            if layer == 0:
+                c.drawPath(pp, P(hx(mixhex("#b86a10", "#12082e", uv), 0.30 * dk_), blur=3))
+            c.drawLine(0, -rd - ll * 0.1, 0, -rd - ll * 0.82, P(hx(mixhex("#e8961a", "#ffffff", uv), 0.35 if not uv else 0.22), stroke=max(2, r * 0.008)))
+            c.drawPath(pp, P(hx(mixhex("#c77812", "#1a0f40", uv), 0.45), stroke=max(1.5, r * 0.006)))
+            c.restore()
+    # seed disc
+    c.drawCircle(0, 0, rd, P(shader=rad(-rd * 0.3, -rd * 0.35, rd * 1.4, [hx(mixhex("#8a4e22", "#3a2280", uv)), hx(mixhex("#5e3216", UV_DARK, uv)), hx(mixhex("#3e200f", "#160b38", uv))], [0, 0.6, 1])))
+    for k in range(260):
+        an = k * 2.39996
+        d = rd * 0.93 * math.sqrt((k + 0.5) / 260)
+        sz = rd * (0.022 + 0.022 * d / rd)
+        lc = mixhex(mixhex("#a8652a", "#7a4519", k % 3 / 2), mixhex("#4a2c9a", "#2d1a6a", k % 3 / 2), uv)
+        c.drawCircle(math.cos(an) * d, math.sin(an) * d, sz, P(hx(lc, 0.85)))
+    c.drawCircle(-rd * 0.25, -rd * 0.3, rd * 0.55, P(hx(mixhex("#ffcf6b", "#a596ff", uv), 0.12), blur=rd * 0.2))
+    c.drawCircle(0, 0, rd, P(hx(mixhex("#3a1d0c", "#100726", uv), 0.6), stroke=max(2, r * 0.012)))
+    if rings > 0:
+        for k in range(2):
+            pr = (rings + k * 0.5) % 1.0
+            c.drawCircle(0, 0, lerp(rd, r * 1.15, ease_out(pr)), P(hx("#d9c8ff", 0.55 * (1 - pr)), stroke=6))
+    c.restore()
+
+
+def stem(c, x0, y0, x1, y1, w, t, bend=0.0, col="#2f9a5e", shade="#1f6e46", leaves=()):
+    """curved flower stem from ground (x0, y0) up to (x1, y1) with optional leaves [(k along stem, side, size)]"""
+    mx, my = (x0 + x1) / 2 + bend, (y0 + y1) / 2
+    pth = skia.Path(); pth.moveTo(x0, y0); pth.quadTo(mx, my, x1, y1)
+    c.drawPath(pth, P(hx(shade), stroke=w * 1.25))
+    c.drawPath(pth, P(hx(col), stroke=w))
+    for (k, side, sz) in leaves:
+        px = (1 - k) ** 2 * x0 + 2 * (1 - k) * k * mx + k * k * x1
+        py = (1 - k) ** 2 * y0 + 2 * (1 - k) * k * my + k * k * y1
+        sw = 4 * math.sin(t * 1.1 + k * 5)
+        c.save(); c.translate(px, py); c.rotate(side * (58 + sw)); c.scale(1, 1)
+        lf = path_from([(0, 0), (sz * 0.35, -sz * 0.28), (sz * 0.2, -sz * 0.85), (0, -sz), (-sz * 0.22, -sz * 0.7), (-sz * 0.25, -sz * 0.25)], True, 1.0)
+        c.drawPath(lf, P(shader=lin(-sz * 0.3, 0, sz * 0.3, 0, [hx("#4fd08a"), hx(col), hx(shade)])))
+        c.drawLine(0, -sz * 0.05, 0, -sz * 0.8, P(hx(shade, 0.6), stroke=3))
+        c.restore()
+
+
+def eye_section(c, x, y, R, rot, lens_hi=0.0, a=1.0):
+    """side cut-away of a human eye, front (cornea) pointing along angle rot (degrees; 180 = facing left).
+    Returns a function local->world for placing rays/labels. Lens sits at local (-0.66R, 0)."""
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.rotate(rot - 180)
+    # optic nerve (behind the ball, to the right)
+    c.drawPath(path_from([(R * 0.80, -R * 0.16), (R * 1.25, -R * 0.20), (R * 1.6, -R * 0.12), (R * 1.6, R * 0.14), (R * 1.25, R * 0.20), (R * 0.80, R * 0.16)], True, 0.6),
+               P(shader=lin(0, -R * 0.2, 0, R * 0.2, [hx("#ffc4d4"), hx("#f08aa8"), hx("#c45f86")])))
+    # sclera (white ball), lit from the upper left of the frame
+    c.drawCircle(0, 0, R, P(shader=rad(-R * 0.35, -R * 0.45, R * 1.6, [hx("#ffffff"), hx("#eee8ff"), hx("#c6bdf0")], [0, 0.55, 1])))
+    # inside (vitreous) - soft clear blue
+    c.drawCircle(0, 0, R * 0.9, P(shader=rad(-R * 0.2, -R * 0.2, R * 1.1, [hx("#e9f6ff"), hx("#cfe4ff"), hx("#b9c9f4")])))
+    # retina at the back
+    c.drawArc(skia.Rect.MakeXYWH(-R * 0.86, -R * 0.86, R * 1.72, R * 1.72), -62, 124, False, P(hx("#ff7aa0"), stroke=R * 0.07, cap=False))
+    c.drawArc(skia.Rect.MakeXYWH(-R * 0.86, -R * 0.86, R * 1.72, R * 1.72), -62, 124, False, P(hx("#ffd0de", 0.7), stroke=R * 0.015, cap=False))
+    # cornea dome
+    dome = skia.Path(); dome.addArc(skia.Rect.MakeXYWH(-R * 1.12, -R * 0.52, R * 0.9, R * 1.04), 105, 150)
+    c.drawPath(dome, P(hx("#9fd8ff", 0.45)))
+    c.drawPath(dome, P(hx("#ffffff", 0.95), stroke=R * 0.028))
+    # iris (two bars with the pupil gap between them)
+    for sgn in (-1, 1):
+        c.drawRoundRect(skia.Rect.MakeLTRB(-R * 0.88, R * 0.19 if sgn > 0 else -R * 0.62, -R * 0.80, R * 0.62 if sgn > 0 else -R * 0.19), R * 0.04, R * 0.04,
+                        P(shader=lin(-R * 0.88, 0, -R * 0.80, 0, [hx("#6fb8ff"), hx("#2a6fd0")])))
+    # lens
+    lr = skia.Rect.MakeXYWH(-R * 0.79, -R * 0.30, R * 0.26, R * 0.60)
+    if lens_hi > 0:
+        c.drawOval(lr.makeOutset(R * 0.07, R * 0.07), P(hx("#ffe9a0", 0.55 * lens_hi), blur=R * 0.05))
+    c.drawOval(lr, P(shader=lin(-R * 0.79, -R * 0.3, -R * 0.53, R * 0.3, [hx("#d6eeff"), hx("#7fbfff"), hx("#4a8fe0")])))
+    c.drawOval(lr, P(hx(mixhex("#ffffff", "#ffd84d", lens_hi)), stroke=R * 0.018 * (1 + lens_hi)))
+    c.drawOval(skia.Rect.MakeXYWH(-R * 0.75, -R * 0.24, R * 0.08, R * 0.2), P(hx("#ffffff", 0.7)))
+    c.drawCircle(0, 0, R, P(hx("#8f84d6", 0.6), stroke=R * 0.012))
+    c.restore()
+    th = math.radians(rot - 180)
+
+    def to_world(lx, ly):
+        return x + lx * math.cos(th) - ly * math.sin(th), y + lx * math.sin(th) + ly * math.cos(th)
+    return to_world
+
+
+def _uvc(c0, c1, u):
+    return mixhex(c0, c1, clamp(u))
+
+
+def reindeer(c, x, y, s, t, head=0.0, uv=0.0, a=1.0, eye_glow=0.0):
+    """reindeer in side view facing RIGHT, standing; (x, y) = ground point under the body centre, s = scale (1 ~ 330 px
+    long). head = 0 head up, 1 grazing (head lowered). uv 0..1 = seen in ultraviolet (fur absorbs UV -> dark)."""
+    if a <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.scale(s, s)
+    lit, sh, far = _uvc("#94786a", "#33245e", uv), _uvc("#6e5850", "#251a4a", uv), _uvc("#5a4842", "#1e1540", uv)
+    mane, ant, ant_sh = _uvc("#f1e8dc", "#3b2c70", uv), _uvc("#ead8b6", "#3e2f78", uv), _uvc("#bda582", "#2a1d58", uv)
+    hoof = _uvc("#3a2c2a", "#140c30", uv)
+    rim = "#c2b6ff" if uv > 0.5 else "#ffe2b8"
+
+    def leg(lx, top, w, col, k):
+        sw = 0.0
+        pts = [(lx - w * 0.55, top), (lx + w * 0.55, top), (lx + w * 0.42, -38), (lx + w * 0.30, -10), (lx - w * 0.30, -10), (lx - w * 0.42, -38)]
+        c.drawPath(path_from(pts, True, 0.4), P(hx(col)))
+        c.drawRoundRect(skia.Rect.MakeLTRB(lx - w * 0.42, -14, lx + w * 0.42, 0), 5, 5, P(hx(hoof)))
+    # far legs + far antler first
+    leg(-100, -95, 26, far, 0); leg(78, -95, 24, far, 1)
+    # body
+    body = path_from([(-150, -152), (-60, -168), (40, -172), (98, -160), (124, -122), (112, -80), (60, -64), (-20, -60), (-110, -64), (-160, -88), (-172, -124)], True, 1.0)
+    c.drawPath(body, P(shader=lin(0, -175, 0, -58, [hx(lit), hx(lit), hx(sh)], [0, 0.45, 1])))
+    c.drawPath(path_from([(-140, -148), (-60, -164), (40, -168), (96, -156)], False, 1.0), P(hx(rim, 0.55), stroke=4))
+    # pale belly + rump patch
+    c.save(); c.clipPath(body, doAntiAlias=True)
+    c.drawOval(skia.Rect.MakeXYWH(-120, -86, 220, 50), P(hx(mane, 0.55)))
+    c.drawOval(skia.Rect.MakeXYWH(-176, -142, 34, 44), P(hx(mane, 0.35), blur=6))
+    c.restore()
+    # near legs
+    leg(-128, -100, 30, lit, 2); leg(100, -100, 27, lit, 3)
+    # tail tuft
+    c.drawPath(path_from([(-168, -138), (-186, -128), (-180, -110), (-166, -118)], True, 1.0), P(hx(mane)))
+    # neck + head + antlers, rotated around the shoulder for grazing
+    c.save(); c.translate(96, -150); c.rotate(42 * head); c.translate(-96, 150)
+
+    def antler(dx, dy, col, colsh, wd):
+        pp = P(hx(col), stroke=wd)
+        beam = [(158 + dx, -286 + dy), (138 + dx, -340 + dy), (118 + dx, -398 + dy), (126 + dx, -446 + dy), (160 + dx, -478 + dy)]
+        c.drawPath(path_from(beam, False, 1.0), P(hx(colsh), stroke=wd * 1.25))
+        c.drawPath(path_from(beam, False, 1.0), pp)
+        for (p0, p1) in [((134, -366), (176, -392)), ((122, -420), (92, -452)), ((128, -446), (146, -500)), ((160, -300), (200, -330)), ((200, -330), (212, -352))]:
+            c.drawLine(p0[0] + dx, p0[1] + dy, p1[0] + dx, p1[1] + dy, pp)
+    antler(-22, 6, _uvc("#cdb994", "#2c2060", uv), _uvc("#a68e6c", "#1e1548", uv), 9)
+    neck = path_from([(58, -150), (122, -122), (178, -222), (156, -276), (106, -246)], True, 0.8)
+    c.drawPath(neck, P(shader=lin(60, -270, 140, -130, [hx(lit), hx(sh)])))
+    c.drawPath(path_from([(118, -128), (146, -150), (170, -206), (150, -170)], True, 1.0), P(hx(mane)))
+    headp = path_from([(140, -276), (176, -292), (232, -266), (262, -244), (258, -224), (226, -218), (172, -226), (142, -246)], True, 1.0)
+    c.drawPath(headp, P(shader=lin(150, -290, 200, -220, [hx(lit), hx(sh)])))
+    c.drawPath(path_from([(150, -280), (176, -292), (232, -266)], False, 1.0), P(hx(rim, 0.5), stroke=3.5))
+    c.drawCircle(256, -236, 10, P(hx(hoof)))
+    ear = path_from([(150, -276), (122, -300), (112, -296), (138, -268)], True, 1.0)
+    c.drawPath(ear, P(hx(sh)))
+    antler(0, 0, ant, ant_sh, 11)
+    # eye: white + pupil + highlight
+    if eye_glow > 0:
+        c.drawCircle(196, -262, 30, P(shader=rad(196, -262, 30, [hx("#c9a8ff", 0.8 * eye_glow), hx("#8a5cff", 0)]), mode=skia.BlendMode.kPlus))
+    c.drawCircle(196, -262, 8.5, P(hx("#fbf8ff")))
+    c.drawCircle(198, -261, 5.5, P(hx("#1a1440")))
+    c.drawCircle(196, -264, 2.2, P(hx("#ffffff")))
+    c.restore()
+    c.restore()
+
+
+def wolf(c, x, y, s, t, walk=0.0, uv=0.0, a=1.0):
+    """white Arctic wolf in side view facing LEFT; (x, y) = ground point under the body, s = scale (1 ~ 330 px long).
+    walk = gait strength 0..1 (legs swing). uv 0..1: in ultraviolet its fur looks dark."""
+    if a <= 0:
+        return
+    c.saveLayerAlpha(None, int(255 * a)) if a < 1 else c.save()
+    c.translate(x, y); c.scale(s, s)
+    lit, sh, far = _uvc("#f6f6ff", "#2a1d58", uv), _uvc("#d0d4f2", "#211650", uv), _uvc("#bfc3e8", "#1a1145", uv)
+    nose = _uvc("#3a3550", "#0e0828", uv)
+    rim = "#ffffff" if uv < 0.5 else "#a596ff"
+    ph = t * 2 * math.pi * 1.5
+
+    def front_leg(lx, col, k):
+        sw = 14 * walk * math.sin(ph + k * math.pi)
+        c.save(); c.translate(lx, -96); c.rotate(sw)
+        c.drawPath(path_from([(-17, 0), (17, 0), (12, 52), (9, 88), (-9, 88), (-12, 52)], True, 0.5), P(hx(col)))
+        c.drawPath(path_from([(-13, 82), (9, 82), (10, 96), (-20, 96), (-20, 90)], True, 0.6), P(hx(col)))
+        c.restore()
+
+    def hind_leg(lx, col, k):
+        sw = 14 * walk * math.sin(ph + k * math.pi)
+        c.save(); c.translate(lx, -104); c.rotate(sw)
+        thigh = path_from([(-26, -8), (26, -12), (30, 30), (14, 58), (-12, 50), (-22, 20)], True, 1.0)
+        c.drawPath(thigh, P(hx(col)))
+        c.drawPath(path_from([(2, 46), (20, 52), (8, 76), (10, 104), (-6, 104), (-8, 74)], True, 0.5), P(hx(col)))
+        c.drawPath(path_from([(-14, 98), (10, 98), (12, 108), (-18, 108), (-18, 102)], True, 0.6), P(hx(col)))
+        c.restore()
+    front_leg(-62, far, 1); hind_leg(96, far, 0)
+    # bushy tail hanging low behind
+    tail = path_from([(126, -122), (160, -104), (186, -70), (190, -40), (176, -30), (160, -50), (140, -84), (118, -104)], True, 1.0)
+    c.drawPath(tail, P(shader=lin(120, -120, 190, -30, [hx(sh), hx(lit)])))
+    # body: deep chest at the front, tucked belly
+    body = path_from([(-96, -142), (-20, -146), (60, -140), (126, -130), (146, -106), (130, -80), (70, -80), (10, -76), (-60, -64),
+                      (-104, -74), (-122, -104)], True, 1.0)
+    c.drawPath(body, P(shader=lin(0, -146, 0, -64, [hx(lit), hx(lit), hx(sh)], [0, 0.45, 1])))
+    c.drawPath(path_from([(-90, -142), (-20, -146), (60, -140), (124, -130)], False, 1.0), P(hx(rim, 0.6), stroke=4))
+    front_leg(-84, lit, 0); hind_leg(112, lit, 1)
+    # neck with a fluffy ruff
+    neck = path_from([(-40, -146), (-96, -186), (-140, -178), (-150, -140), (-138, -100), (-118, -86), (-92, -100), (-70, -104)], True, 0.9)
+    c.drawPath(neck, P(shader=lin(-140, -186, -80, -90, [hx(lit), hx(sh)])))
+    for k in range(5):
+        fx = -138 + k * 12
+        fy = -96 - k * 2
+        c.drawPath(path_from([(fx - 8, fy - 14), (fx + 2, fy + 14), (fx + 10, fy - 10)], True, 0.6), P(hx(lit)))
+    # head: skull + long snout
+    headp = path_from([(-110, -196), (-150, -204), (-194, -186), (-232, -164), (-236, -150), (-206, -138), (-160, -136), (-122, -150)], True, 0.9)
+    c.drawPath(headp, P(shader=lin(-160, -204, -160, -136, [hx(lit), hx(sh)])))
+    c.drawPath(path_from([(-206, -142), (-170, -138), (-150, -142)], False, 1.0), P(hx(sh, 0.9), stroke=3))  # mouth line
+    for ex_, col in ((-118, sh), (-134, lit)):
+        c.drawPath(path_from([(ex_ - 4, -194), (ex_ + 4, -240), (ex_ + 22, -196)], True, 0.3), P(hx(col)))
+    c.drawPath(path_from([(-128, -198), (-124, -226), (-116, -200)], True, 0.3), P(hx(_uvc("#c9b8e8", "#160e38", uv))))
+    c.drawCircle(-234, -158, 8, P(hx(nose)))
+    # eye: white + pupil + highlight
+    c.drawOval(skia.Rect.MakeXYWH(-176, -186, 16, 11), P(hx(_uvc("#fbf8ff", "#3b2c70", uv))))
+    c.drawCircle(-170, -180.5, 4.6, P(hx("#1a1440")))
+    c.drawCircle(-171.5, -182.5, 1.6, P(hx("#ffffff")))
+    c.restore()

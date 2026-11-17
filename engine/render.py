@@ -45,6 +45,7 @@ SPAN = {n: (a, b) for n, a, b in SCENES}
 
 def draw_scene(c, name, t):
     c.save()
+    c.clipRect(skia.Rect.MakeWH(W, H))      # a scene never paints outside its own frame (matters during slides)
     if name not in STATIC:
         a, b = SPAN[name]
         p = seg(t, a, b)
